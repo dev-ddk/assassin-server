@@ -1,8 +1,12 @@
 [package]
-name = "assassin-server"
+name = "assassin_server"
 version = "0.1.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+simple_logger = "1.11.0"
+jsonwebtoken = "7"
+serde = {version = "1.0", features = ["derive"]}
+openssl = "0.10.35"
