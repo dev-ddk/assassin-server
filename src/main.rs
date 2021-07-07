@@ -1,7 +1,23 @@
+use actix_web::{middleware::Logger, web, App, HttpServer};
+
 mod utils;
 
-fn main() {
-    let test_id: &str = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjhmNDMyMDRhMTc5MTVlOGJlN2NjZDdjYjI2NGRmNmVhMzgzYzQ5YWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vYXNzYXNzaW4tOGM3MDQiLCJhdWQiOiJhc3Nhc3Npbi04YzcwNCIsImF1dGhfdGltZSI6MTYyNTYxMjYzNSwidXNlcl9pZCI6InJZWFhUaVdLUGFkbHdidzZWcDZvMER1T0xCSTMiLCJzdWIiOiJyWVhYVGlXS1BhZGx3Ync2VnA2bzBEdU9MQkkzIiwiaWF0IjoxNjI1NjEyNjM1LCJleHAiOjE2MjU2MTYyMzUsImVtYWlsIjoiaW5mb0BrdHJ1b25nLmRldiIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJpbmZvQGt0cnVvbmcuZGV2Il19LCJzaWduX2luX3Byb3ZpZGVyIjoicGFzc3dvcmQifX0.GaDCwW-gcQIZz4Nrz8XueEaXjw4NUwFHJk358F7pBN0Ob1Uyaz-gJngk5yCgTzcvtajt5poz8Y8fs9b4XpLVdJF2c7Jol_HwxUqYP2eAFRPFPrZniZQBDS2yDNqYrE6WeN8nWIvw03ChXdcCx7rXoF0XSFyLqRrilJIKDHcANZPGppnImwPXzvcjXax4LYk1ihhwnu0JXmIDqE6Fy2qpXsFJkw2E5V_HhM-D9TNUQD48Fv70oUlwJEiXrj60Pb8nWkrNmUcys0E0xNWVAMrL0MwQV7hgIpZ5S1zF20ziO52KpkeLuFYcwMhszcKKOnNPe44mfuWYp4oaBM_1-FgUdQ";
-    let validator = utils::auth::Validator::new();
-    validator.validate_token(test_id);
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let config = utils::config::Config::from_env().expect("Server configuration");
+
+    HttpServer::new(|| {
+        let validator = web::Data::new(utils::auth::Validator::new());
+        App::new()
+            .wrap(Logger::default())
+            .data(validator.clone())
+            .service(assassin_server::hello_world)
+            .service(assassin_server::echo)
+            .service(assassin_server::login)
+    })
+    .bind(format!("{}:{}", config.host, config.port))?
+    .run()
+    .await?;
+
+    Ok(())
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
 use openssl::x509;
 use reqwest;
@@ -31,6 +33,12 @@ pub struct UserClaims {
     firebase: Firebase,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct IdToken {
+    pub id_token: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct Validator {
     validation: Validation,
     validation_keys: HashMap<String, DecodingKey<'static>>,
@@ -62,9 +70,7 @@ impl Validator {
         );
         match token {
             Ok(token) => Some(token.claims),
-            Err(e) => {
-                panic!("Received invalid token. Error: {:?}", e);
-            }
+            Err(e) => None,
         }
     }
 }
