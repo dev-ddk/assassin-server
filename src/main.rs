@@ -1,4 +1,5 @@
 use actix_web::{middleware::Logger, web, App, HttpServer};
+use std::sync::Mutex;
 
 mod utils;
 
@@ -6,11 +7,9 @@ mod utils;
 async fn main() -> std::io::Result<()> {
     let config = utils::config::Config::from_env().expect("Server configuration");
 
-    HttpServer::new(|| {
-        let validator = web::Data::new(utils::auth::Validator::new());
+    HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .data(validator.clone())
             .service(assassin_server::hello_world)
             .service(assassin_server::echo)
             .service(assassin_server::login)

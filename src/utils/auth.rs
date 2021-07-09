@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+#[macro_use]
+use lazy_static;
+
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
 use openssl::x509;
 use reqwest;
@@ -7,6 +10,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use snailquote;
 use std::collections::HashMap;
+
+lazy_static::lazy_static! {
+    pub static ref VALIDATOR: Validator = Validator::new();
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Identity {
