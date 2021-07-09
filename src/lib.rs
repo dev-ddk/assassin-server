@@ -1,6 +1,4 @@
-use actix_web::{get, http::StatusCode, post, web, HttpRequest, HttpResponse, Responder};
-use std::sync::Mutex;
-use tracing::{info, instrument};
+use actix_web::{get, http::StatusCode, post, web, HttpResponse, Responder};
 
 mod utils;
 
@@ -15,11 +13,13 @@ pub async fn echo(req_body: String) -> impl Responder {
 }
 
 #[post("/login")]
-pub async fn login(token: web::Query<utils::auth::IdToken>) -> impl Responder {
+pub async fn login(token: web::Json<utils::auth::IdToken>) -> impl Responder {
     let claims = utils::auth::VALIDATOR.validate_token(&token.id_token);
 
     match claims {
-        Some(claims) => HttpResponse::Ok().body("Good token!"),
+        Some(claims) => {
+            HttpResponse::Ok().body(format!("Hi {}, you're now authenticated!", claims.email))
+        }
         None => HttpResponse::build(StatusCode::FORBIDDEN).body("Bad token!"),
     }
 }

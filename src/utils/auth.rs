@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-
-#[macro_use]
 use lazy_static;
 
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
@@ -16,28 +13,28 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Identity {
-    email: Vec<String>,
+pub struct Identity {
+    pub email: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Firebase {
-    identities: Identity,
-    sign_in_provider: String,
+pub struct Firebase {
+    pub identities: Identity,
+    pub sign_in_provider: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserClaims {
-    iss: String,
-    aud: String,
-    auth_time: usize,
-    user_id: String,
-    sub: String,
-    iat: usize,
-    exp: usize,
-    email: String,
-    email_verified: bool,
-    firebase: Firebase,
+    pub iss: String,
+    pub aud: String,
+    pub auth_time: usize,
+    pub user_id: String,
+    pub sub: String,
+    pub iat: usize,
+    pub exp: usize,
+    pub email: String,
+    pub email_verified: bool,
+    pub firebase: Firebase,
 }
 
 #[derive(Debug, Deserialize)]

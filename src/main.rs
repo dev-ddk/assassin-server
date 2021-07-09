@@ -1,5 +1,4 @@
-use actix_web::{middleware::Logger, web, App, HttpServer};
-use std::sync::Mutex;
+use actix_web::{middleware::Logger, App, HttpServer};
 
 mod utils;
 
