@@ -23,3 +23,5 @@ tracing-futures = "0.2"
 tracing-log = { version = "0.1", features = ["env_logger"] }
 tracing-subscriber = "0.2"
 lazy_static = "1.4.0"
+diesel = { version = "1.4.7", features = ["postgres"] }
+listenfd = "0.3.5"

@@ -9,6 +9,7 @@ use tracing_subscriber::EnvFilter;
 pub struct Config {
     pub host: String,
     pub port: u32,
+    pub postgres_url: String,
 }
 
 impl Config {
