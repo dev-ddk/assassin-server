@@ -28,20 +28,23 @@ CREATE TYPE role_t AS ENUM (
     'USER'
 );
 
-CREATE TABLE player (
+CREATE TABLE account (
     id              INT GENERATED ALWAYS AS IDENTITY,
     nickname        VARCHAR NOT NULL UNIQUE,
     email           VARCHAR NOT NULL UNIQUE,
     uid     VARCHAR NOT NULL UNIQUE,
     role            role_t NOT NULL DEFAULT 'USER',
+    registered_at   TIMESTAMP NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (id)
 );
+
+CREATE UNIQUE INDEX uid_index ON account(uid);
 
 CREATE TABLE game (
     id              INT GENERATED ALWAYS AS IDENTITY,
     lobby_name      VARCHAR,
     lobby_owner     INT NOT NULL
-                    REFERENCES player(id)
+                    REFERENCES account(id)
                         ON UPDATE CASCADE ON DELETE NO ACTION,
     code            VARCHAR(6) UNIQUE NOT NULL,
     -- Insert here game settings
