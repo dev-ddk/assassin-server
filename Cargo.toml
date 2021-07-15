@@ -23,5 +23,8 @@ tracing-futures = "0.2"
 tracing-log = { version = "0.1", features = ["env_logger"] }
 tracing-subscriber = "0.2"
 lazy_static = "1.4.0"
-diesel = { version = "1.4.7", features = ["postgres"] }
+diesel = { version = "1.4.7", features = ["postgres", "r2d2", "chrono"] }
+diesel-derive-enum = { version = "1", features = ["postgres"] }
+diesel_migrations = "1.4.0"
 listenfd = "0.3.5"
+chrono = { version = "0.4", features = ["serde"] }
