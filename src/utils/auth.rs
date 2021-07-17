@@ -1,7 +1,11 @@
 use lazy_static;
 
+use actix_web::{dev::ServiceRequest, Error};
+use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
+use actix_web_httpauth::extractors::AuthenticationError;
+use eyre::{eyre, Result};
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
-use openssl::x509;
+use openssl::x509::X509;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,6 +15,10 @@ use std::collections::HashMap;
 lazy_static::lazy_static! {
     pub static ref VALIDATOR: Validator = Validator::new();
 }
+
+const ISSUER: &str = "https://securetoken.google.com/assassin-8c704";
+const GOOGLE_PK_URL: &str =
+    "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Identity {
@@ -37,11 +45,6 @@ pub struct UserClaims {
     pub firebase: Firebase,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct IdToken {
-    pub id_token: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct Validator {
     validation: Validation,
@@ -58,30 +61,52 @@ impl Validator {
         }
     }
 
-    pub fn validate_token(&self, id_token: &str) -> Option<UserClaims> {
+    pub fn validate_token(&self, id_token: &str) -> Result<UserClaims> {
         // Here we need to decode the token to get the key with which to re-decode, this time with verification
 
-        let key_fingerprint = dangerous_insecure_decode::<UserClaims>(id_token)
-            .unwrap()
+        let kid = dangerous_insecure_decode::<UserClaims>(id_token)?
             .header
             .kid
-            .unwrap();
+            .ok_or(eyre!("Could not extract KID from given JWT"))?;
 
-        let token = decode::<UserClaims>(
-            id_token,
-            self.validation_keys.get(&key_fingerprint).unwrap(),
-            &self.validation,
-        );
-        match token {
-            Ok(token) => Some(token.claims),
-            Err(e) => None,
+        let validation_key = self.validation_keys.get(&kid).ok_or(eyre!(
+            "Key used for signature is not present in Google's Public Key Repository"
+        ))?;
+
+        decode::<UserClaims>(id_token, validation_key, &self.validation)
+            .map(|tok| tok.claims)
+            .map_err(|e| eyre::Report::new(e).wrap_err("Token validation failed"))
+    }
+}
+
+pub async fn bearer_auth_validator(
+    req: ServiceRequest,
+    credentials: BearerAuth,
+) -> Result<ServiceRequest, Error> {
+    let config = req
+        .app_data::<Config>()
+        .map(|data| data.clone())
+        .unwrap_or_else(Default::default);
+
+    let claims = VALIDATOR.validate_token(credentials.token());
+
+    match claims {
+        Ok(claims) => {
+            let (http_request, payload) = req.into_parts();
+            http_request.extensions_mut().insert(claims);
+            let req_result = ServiceRequest::from_parts(http_request, payload);
+            match req_result {
+                Ok(req) => Ok(req),
+                Err(_) => panic!("Could not reconstruct from parts"),
+            }
         }
+        Err(_) => Err(AuthenticationError::from(config).into()),
     }
 }
 
 fn get_validator() -> Validation {
     let mut validator = Validation {
-        iss: Some("https://securetoken.google.com/assassin-8c704".to_string()),
+        iss: Some(ISSUER.to_string()),
         algorithms: vec![Algorithm::RS256],
         ..Validation::default()
     };
@@ -91,12 +116,10 @@ fn get_validator() -> Validation {
 }
 
 fn get_validation_keys() -> HashMap<String, DecodingKey<'static>> {
-    let body = reqwest::blocking::get(
-        "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com",
-    )
-    .unwrap()
-    .text()
-    .unwrap();
+    let body = reqwest::blocking::get(GOOGLE_PK_URL)
+        .unwrap()
+        .text()
+        .unwrap();
 
     let keys: Value = serde_json::from_str(&body).unwrap();
 
@@ -116,7 +139,7 @@ fn get_validation_keys() -> HashMap<String, DecodingKey<'static>> {
 }
 
 fn get_key_from_certificate(certificate: String) -> DecodingKey<'static> {
-    if let Ok(cert) = x509::X509::from_pem(snailquote::unescape(&certificate).unwrap().as_bytes()) {
+    if let Ok(cert) = X509::from_pem(snailquote::unescape(&certificate).unwrap().as_bytes()) {
         let key = cert.public_key().unwrap().public_key_to_pem().unwrap();
         DecodingKey::from_rsa_pem(&key).unwrap().into_static()
     } else {

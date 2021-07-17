@@ -28,5 +28,6 @@ pub fn init() {
 }
 
 pub fn connection() -> Result<DbConnection> {
-    POOL.get().map_err(|e| eyre::Report::new(e))
+    POOL.get()
+        .map_err(|e| eyre::Report::new(e).wrap_err("Could not obtain connection from DB pool"))
 }

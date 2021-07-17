@@ -35,11 +35,17 @@ pub enum TargetStatus {
     GAME_END,
 }
 
-#[derive(Debug, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
 #[PgType = "role_t"]
 #[DieselType = "Role_t"]
 #[DbValueStyle = "verbatim"]
 pub enum Role {
     USER,
     ADMIN,
+}
+
+impl Default for Role {
+    fn default() -> Self {
+        Role::USER
+    }
 }

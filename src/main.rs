@@ -1,4 +1,4 @@
 #[actix_web::main]
-async fn main() {
-    assassin_server::run_server().await;
+async fn main() -> std::io::Result<()> {
+    assassin_server::run_server().await
 }

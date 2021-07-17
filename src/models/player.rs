@@ -9,7 +9,7 @@ use crate::models::enums::Role;
 
 use crate::schema::*;
 
-#[derive(Debug, Serialize, Deserialize, Insertable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
 #[table_name = "account"]
 pub struct NewAccount {
     nickname: String,
@@ -56,8 +56,14 @@ impl Account {
         };
 
         diesel::insert_into(account::table)
-            .values(new_account)
+            .values(new_account.clone())
             .get_result(&conn)
-            .map_err(|e| eyre::Report::new(e))
+            .map_err(|e| {
+                let err_str = format!(
+                    "Failed in registering {}",
+                    serde_json::to_string(&new_account).unwrap()
+                );
+                eyre::Report::new(e).wrap_err(err_str)
+            })
     }
 }

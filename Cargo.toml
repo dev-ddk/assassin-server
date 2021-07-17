@@ -15,6 +15,7 @@ reqwest = {version = "0.11.4", features = ["blocking"]}
 snailquote = "0.3.0"
 dotenv = "0.15.0"
 actix-web = "3"
+actix-web-httpauth = "0.5.1"
 config = "0.10"
 eyre = "0.4"
 color-eyre = "0.3"
@@ -28,3 +29,4 @@ diesel-derive-enum = { version = "1", features = ["postgres"] }
 diesel_migrations = "1.4.0"
 listenfd = "0.3.5"
 chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3.15"
