@@ -1,0 +1,25 @@
+name: dev-deploy
+
+on:
+    workflow_run:
+        workflows: ["Rust"]
+        branches: [main]
+        types:
+            - completed
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        steps:
+            - uses: actions/checkout@v2
+
+            - uses: webfactory/ssh-agent@v0.5.3
+              with:
+                  ssh-private-key: ${{ secrets.DEPLOYMENT_SSH_KEY }}
+
+            - name: Add SSH Fingerprint to Known Hosts
+              run: echo "devddk.it ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBrfhkYSUn2c3OlqfSPQoWbcEk3wvT7qObvfF4LVY8xs" >> ~/.ssh/known_hosts
+
+            - name: Deploy new version of API
+              run: ssh github-ci@devddk.it dev-deploy
