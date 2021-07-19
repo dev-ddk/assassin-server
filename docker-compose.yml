@@ -1,14 +1,35 @@
 version: '3'
 
 services:
+
     db:
         image: postgres:13.3
         environment:
             - POSTGRES_USER=${POSTGRES_USER}
             - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-        ports:
-            - "5432:5432"
         container_name: "assassin-db"
+        networks:
+            backend:
+
+    assassin-server:
+        build:
+            context: .
+            dockerfile: dockerfiles/Dockerfile.dev
+        ports:
+            - "80:8080"
+        environment:
+            - HOST=${HOST}
+            - PORT=${PORT}
+            - POSTGRES_HOST=db
+            - POSTGRES_PORT=5432
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - POSTGRES_DB=${POSTGRES_USER}
+            - POSTGRES_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_USER}
+            - RUST_LOG=${RUST_LOG}
+        container_name: "assassin-server"
+        depends_on:
+            - "db"
         networks:
             backend:
 
