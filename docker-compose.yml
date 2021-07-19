@@ -16,7 +16,7 @@ services:
             context: .
             dockerfile: dockerfiles/Dockerfile.dev
         ports:
-            - "80:8080"
+            - "${DOCKER_OUTER_HOST}:${DOCKER_OUTER_PORT}:${PORT}"
         environment:
             - HOST=${HOST}
             - PORT=${PORT}
