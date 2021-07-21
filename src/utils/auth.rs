@@ -3,7 +3,7 @@ use lazy_static;
 use actix_web::{dev::ServiceRequest, Error};
 use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
 use actix_web_httpauth::extractors::AuthenticationError;
-use eyre::{eyre, Result};
+use color_eyre::{eyre::eyre, Result};
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
 use openssl::x509::X509;
 use reqwest;
@@ -64,7 +64,10 @@ impl Validator {
     pub fn validate_token(&self, id_token: &str) -> Result<UserClaims> {
         // Here we need to decode the token to get the key with which to re-decode, this time with verification
 
-        let kid = dangerous_insecure_decode::<UserClaims>(id_token)?
+        let kid = dangerous_insecure_decode::<UserClaims>(id_token)
+            .map_err(|e| {
+                color_eyre::Report::new(e).wrap_err("Could not decode token in insecure mode")
+            })?
             .header
             .kid
             .ok_or(eyre!("Could not extract KID from given JWT"))?;
@@ -75,7 +78,7 @@ impl Validator {
 
         decode::<UserClaims>(id_token, validation_key, &self.validation)
             .map(|tok| tok.claims)
-            .map_err(|e| eyre::Report::new(e).wrap_err("Token validation failed"))
+            .map_err(|e| color_eyre::Report::new(e).wrap_err("Token validation failed"))
     }
 }
 

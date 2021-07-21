@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
+use color_eyre::Result;
 use diesel::prelude::*;
 use diesel::{Insertable, Queryable};
-use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::db;
@@ -63,7 +63,7 @@ impl Account {
                     "Failed in registering {}",
                     serde_json::to_string(&new_account).unwrap()
                 );
-                eyre::Report::new(e).wrap_err(err_str)
+                color_eyre::Report::new(e).wrap_err(err_str)
             })
     }
 }

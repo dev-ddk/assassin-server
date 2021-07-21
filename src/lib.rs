@@ -3,34 +3,44 @@ extern crate diesel_migrations;
 #[macro_use]
 extern crate diesel;
 
-use actix_web::{get, http::StatusCode, post, web, HttpRequest, HttpResponse, Responder};
-use actix_web::{middleware::Logger, App, HttpServer};
+use actix_web::{
+    get, http::StatusCode, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use actix_web_httpauth::middleware::HttpAuthentication;
+use color_eyre::eyre::Report;
 use listenfd::ListenFd;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, instrument, Subscriber};
+use tracing_actix_web::TracingLogger;
 
 mod db;
 mod models;
 mod schema;
 mod utils;
 
+pub use crate::models::errors::ApiError;
 pub use crate::models::player;
 pub use crate::utils::auth;
 pub use crate::utils::config::CFG;
+pub use crate::utils::logging;
 
 #[get("/")]
+#[instrument]
 pub async fn hello_world() -> impl Responder {
     HttpResponse::Ok().body("If you see this, it means that the web server is working correctly!!")
 }
 
 #[post("/login")]
-pub async fn login(req: HttpRequest) -> impl Responder {
+pub async fn login(req: HttpRequest) -> Result<HttpResponse, ApiError> {
     let ext = req.extensions();
 
     let claims = ext.get::<auth::UserClaims>().unwrap();
 
-    HttpResponse::Ok().body(format!("Hi {}, you're now authenticated!", claims.email))
+    Err(ApiError::InternalServerError(Report::msg(
+        "Some kind of error!",
+    )))
+
+    //HttpResponse::Ok().body(format!("Hi {}, you're now authenticated!", claims.email))
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,6 +49,7 @@ pub struct RegisterInfo {
 }
 
 #[post("/register")]
+#[instrument]
 pub async fn register(req: HttpRequest, info: web::Json<RegisterInfo>) -> impl Responder {
     let ext = req.extensions();
 
@@ -69,6 +80,7 @@ pub async fn register(req: HttpRequest, info: web::Json<RegisterInfo>) -> impl R
 }
 
 #[get("/player/{id}")]
+#[instrument]
 pub async fn search(req: HttpRequest, web::Path(id): web::Path<i32>) -> impl Responder {
     let ext = req.extensions();
 
@@ -93,12 +105,21 @@ pub async fn search(req: HttpRequest, web::Path(id): web::Path<i32>) -> impl Res
 pub async fn run_server() -> std::io::Result<()> {
     let mut listenfd = ListenFd::from_env();
 
+    lazy_static::initialize(&CFG);
+    lazy_static::initialize(&auth::VALIDATOR);
+
+    color_eyre::install().unwrap();
     db::init();
+
+    match CFG.enable_bunyan {
+        false => logging::get_subscriber("info".into()),
+        true => logging::get_subscriber_bunyan("assassin-server".into(), "info".into()),
+    };
 
     let mut server = HttpServer::new(move || {
         let auth = HttpAuthentication::bearer(auth::bearer_auth_validator);
         App::new()
-            .wrap(Logger::default())
+            .wrap(TracingLogger)
             .service(hello_world)
             .default_service(web::route().to(|| HttpResponse::NotFound()))
             .service(

@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+
+    db:
+        image: postgres:13.3
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        container_name: "assassin-db"
+        ports:
+            - "5432:5432"
+        networks:
+            backend:
+networks:
+    backend:

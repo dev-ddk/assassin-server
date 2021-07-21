@@ -1,7 +1,7 @@
+use color_eyre::{Report, Result};
 use diesel::pg::PgConnection;
 use diesel::r2d2;
 use diesel_migrations::embed_migrations;
-use eyre::Result;
 use lazy_static::lazy_static;
 use tracing::info;
 
@@ -29,5 +29,5 @@ pub fn init() {
 
 pub fn connection() -> Result<DbConnection> {
     POOL.get()
-        .map_err(|e| eyre::Report::new(e).wrap_err("Could not obtain connection from DB pool"))
+        .map_err(|e| Report::new(e).wrap_err("Could not obtain connection from DB pool"))
 }

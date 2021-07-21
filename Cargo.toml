@@ -17,12 +17,14 @@ dotenv = "0.15.0"
 actix-web = "3"
 actix-web-httpauth = "0.5.1"
 config = "0.10"
-eyre = "0.4"
-color-eyre = "0.3"
+color-eyre = "0.5"
 tracing = "0.1"
 tracing-futures = "0.2"
-tracing-log = { version = "0.1", features = ["env_logger"] }
-tracing-subscriber = "0.2"
+tracing-log = { version = "0.1", features = ["log-tracer", "std"] }
+tracing-bunyan-formatter = "0.2.4"
+tracing-subscriber = { version = "0.2", features = ["ansi"] }
+tracing-actix-web = "0.2.1"
+tracing-error = "0.1.2"
 lazy_static = "1.4.0"
 diesel = { version = "1.4.7", features = ["postgres", "r2d2", "chrono"] }
 diesel-derive-enum = { version = "1", features = ["postgres"] }
@@ -30,3 +32,4 @@ diesel_migrations = "1.4.0"
 listenfd = "0.3.5"
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3.15"
+thiserror = "1.0.26"
