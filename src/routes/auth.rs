@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{http::StatusCode, post, web, HttpResponse, Responder};
 use serde::Deserialize;
 use tracing::{info, instrument};
 
@@ -12,32 +12,31 @@ pub struct RegisterInfo {
 
 #[post("/register")]
 #[instrument]
-pub async fn register(req: HttpRequest, info: web::Json<RegisterInfo>) -> impl Responder {
-    let ext = req.extensions();
-
-    let claims = ext.get::<auth::UserClaims>().unwrap();
-
+pub async fn register(claims: auth::UserClaims, info: web::Json<RegisterInfo>) -> impl Responder {
     info!("Looking for a player with uid {}", &claims.user_id);
 
-    if player::Account::find_by_uid(&claims.user_id).is_err() {
-        info!("No such player found: registering new player");
+    let res = player::Player::register(
+        info.nickname.clone(),
+        claims.email.clone(),
+        claims.user_id.clone(),
+    );
 
-        let account = player::Account::register(
-            info.nickname.clone(),
-            claims.email.clone(),
-            claims.user_id.clone(),
-        )
-        .unwrap();
+    match res {
+        Ok(account) => {
+            let response = format!(
+                "[Authenticated as {}] Registered player info: {}",
+                claims.email,
+                serde_json::to_string(&account).expect("Could not serialize user")
+            );
 
-        let response = format!(
-            "[Authenticated as {}] Registered player info: {}",
-            claims.email,
-            serde_json::to_string(&account).expect("Could not serialize user")
-        );
-
-        HttpResponse::Ok().body(response)
-    } else {
-        HttpResponse::build(StatusCode::BAD_REQUEST).body("Already registered")
+            HttpResponse::Ok().body(response)
+        }
+        Err(e) => {
+            info!("Error during registration: {}", e);
+            info!("Wrapped error: {}", e.root_cause());
+            HttpResponse::build(StatusCode::BAD_REQUEST)
+                .body("An error occurred during registration")
+        }
     }
 }
 

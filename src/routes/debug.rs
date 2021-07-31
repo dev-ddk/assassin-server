@@ -11,7 +11,7 @@ pub async fn search(req: HttpRequest, web::Path(id): web::Path<i32>) -> impl Res
 
     let claims = ext.get::<auth::UserClaims>().unwrap();
 
-    let account = player::Account::find(id);
+    let account = player::Player::find(id);
 
     match account {
         Ok(account) => {

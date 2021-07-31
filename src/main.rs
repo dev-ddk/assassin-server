@@ -36,7 +36,8 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/v1")
                     .wrap(auth)
                     .configure(routes::debug::config)
-                    .configure(routes::auth::config),
+                    .configure(routes::auth::config)
+                    .configure(routes::game::config),
             )
     });
 

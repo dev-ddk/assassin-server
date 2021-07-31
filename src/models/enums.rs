@@ -2,7 +2,7 @@
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
 #[PgType = "game_status_t"]
 #[DieselType = "Game_status_t"]
 #[DbValueStyle = "verbatim"]
@@ -13,7 +13,7 @@ pub enum GameStatus {
     PAUSED,
 }
 
-#[derive(Debug, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
 #[PgType = "player_status_t"]
 #[DieselType = "Player_status_t"]
 #[DbValueStyle = "verbatim"]
@@ -23,7 +23,7 @@ pub enum PlayerStatus {
     LEFT_GAME,
 }
 
-#[derive(Debug, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
 #[PgType = "target_status_t"]
 #[DieselType = "Target_status_t"]
 #[DbValueStyle = "verbatim"]
@@ -47,5 +47,11 @@ pub enum Role {
 impl Default for Role {
     fn default() -> Self {
         Role::USER
+    }
+}
+
+impl Default for GameStatus {
+    fn default() -> Self {
+        GameStatus::WAITING_FOR_PLAYERS
     }
 }

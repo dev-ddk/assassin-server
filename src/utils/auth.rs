@@ -1,9 +1,12 @@
 use lazy_static;
 
-use actix_web::{dev::ServiceRequest, Error};
+use actix_web::{
+    dev::Payload, dev::ServiceRequest, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
+};
 use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
 use actix_web_httpauth::extractors::AuthenticationError;
 use color_eyre::{eyre::eyre, Result};
+use futures_util::future::{err, ok, Ready};
 use jsonwebtoken::{dangerous_insecure_decode, decode, Algorithm, DecodingKey, Validation};
 use openssl::x509::X509;
 use reqwest;
@@ -43,6 +46,21 @@ pub struct UserClaims {
     pub email: String,
     pub email_verified: bool,
     pub firebase: Firebase,
+}
+
+impl FromRequest for UserClaims {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+    type Config = ();
+
+    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        let mut ext = req.extensions_mut();
+        let claims = ext.remove::<UserClaims>();
+        match claims {
+            Some(claims) => ok(claims),
+            None => err(ErrorUnauthorized("Invalid token")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
