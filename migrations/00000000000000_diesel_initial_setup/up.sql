@@ -28,29 +28,65 @@ CREATE TYPE role_t AS ENUM (
     'USER'
 );
 
-CREATE TABLE account (
+CREATE TABLE player (
     id              INT GENERATED ALWAYS AS IDENTITY,
     nickname        VARCHAR NOT NULL UNIQUE,
     email           VARCHAR NOT NULL UNIQUE,
-    uid     VARCHAR NOT NULL UNIQUE,
+    uid             VARCHAR NOT NULL UNIQUE,
     role            role_t NOT NULL DEFAULT 'USER',
-    registered_at   TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    picture         VARCHAR,
+    registered_at   TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (id)
 );
 
-CREATE UNIQUE INDEX uid_index ON account(uid);
+CREATE UNIQUE INDEX uid_index ON player(uid);
 
 CREATE TABLE game (
     id              INT GENERATED ALWAYS AS IDENTITY,
-    lobby_name      VARCHAR,
-    lobby_owner     INT NOT NULL
-                    REFERENCES account(id)
+    name            VARCHAR,
+    owner           INT NOT NULL
+                    REFERENCES player(id)
                         ON UPDATE CASCADE ON DELETE NO ACTION,
     code            VARCHAR(6) UNIQUE NOT NULL,
     -- Insert here game settings
-    game_status     game_status_t NOT NULL,
+    status          game_status_t NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    start_time      TIMESTAMPTZ,
+    end_time        TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
+
+CREATE UNIQUE INDEX game_code_index ON game(code);
+
+CREATE TABLE playergame (
+    player          INT NOT NULL
+                    REFERENCES player(id)
+                        ON UPDATE CASCADE ON DELETE NO ACTION,
+    game            INT NOT NULL
+                    REFERENCES game(id)
+                        ON UPDATE CASCADE ON DELETE NO ACTION,
+    codename        VARCHAR NOT NULL,
+    status          player_status_t NOT NULL,
+    joined_at       TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    PRIMARY KEY (player, game)
+);
+
+CREATE TABLE assignment (
+    assassin        INT NOT NULL
+                    REFERENCES player(id)
+                        ON UPDATE CASCADE ON DELETE NO ACTION,
+    target          INT NOT NULL
+                    REFERENCES player(id)
+                        ON UPDATE CASCADE ON DELETE NO ACTION,
+    game            INT NOT NULL
+                    REFERENCES game(id)
+                        ON UPDATE CASCADE ON DELETE NO ACTION,
+    status          target_status_t NOT NULL,
+    start_time      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    end_time        TIMESTAMPTZ,
+    PRIMARY KEY (assassin, target, game)
+);
+
 
 
 -- Sets up a trigger for the given table to automatically set a column called
