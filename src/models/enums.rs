@@ -28,7 +28,7 @@ pub enum PlayerStatus {
 #[DieselType = "Target_status_t"]
 #[DbValueStyle = "verbatim"]
 pub enum TargetStatus {
-    CURRET,
+    CURRENT,
     KILL_SUCCESS,
     TARGET_LEFT,
     REASSIGNED,

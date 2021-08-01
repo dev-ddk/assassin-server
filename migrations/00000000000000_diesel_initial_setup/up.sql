@@ -34,7 +34,8 @@ CREATE TABLE player (
     email           VARCHAR NOT NULL UNIQUE,
     uid             VARCHAR NOT NULL UNIQUE,
     role            role_t NOT NULL DEFAULT 'USER',
-    registered_at   TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    picture         VARCHAR,
+    registered_at   TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (id)
 );
 
@@ -49,7 +50,9 @@ CREATE TABLE game (
     code            VARCHAR(6) UNIQUE NOT NULL,
     -- Insert here game settings
     status          game_status_t NOT NULL,
-    created_at      TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    start_time      TIMESTAMPTZ,
+    end_time        TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
 
@@ -62,13 +65,9 @@ CREATE TABLE playergame (
     game            INT NOT NULL
                     REFERENCES game(id)
                         ON UPDATE CASCADE ON DELETE NO ACTION,
-    target          INT
-                    REFERENCES player(id)
-                        ON UPDATE CASCADE ON DELETE NO ACTION,
     codename        VARCHAR NOT NULL,
     status          player_status_t NOT NULL,
-    target_status   target_status_t NOT NULL,
-    joined_at       TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    joined_at       TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (player, game)
 );
 
@@ -83,8 +82,8 @@ CREATE TABLE assignment (
                     REFERENCES game(id)
                         ON UPDATE CASCADE ON DELETE NO ACTION,
     status          target_status_t NOT NULL,
-    start_time      TIMESTAMP NOT NULL DEFAULT current_timestamp,
-    end_time        TIMESTAMP,
+    start_time      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    end_time        TIMESTAMPTZ,
     PRIMARY KEY (assassin, target, game)
 );
 

@@ -1,18 +1,16 @@
-use chrono::NaiveDateTime;
+use crate::db;
+use crate::models::enums::{GameStatus, PlayerStatus};
+use crate::models::player::Player;
+use crate::utils::genstring::{get_agent_name, get_game_code};
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use diesel::prelude::*;
 use diesel::{
-    result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError, Associations,
-    Identifiable, Insertable, Queryable,
+    result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError,
+    result::Error::RollbackTransaction, Associations, Identifiable, Insertable, Queryable,
 };
-use lazy_static::lazy_static;
-use rand::{prelude::IteratorRandom, thread_rng};
 use serde::{Deserialize, Serialize};
 use tracing::info;
-
-use crate::db;
-use crate::models::enums::{GameStatus, PlayerStatus, TargetStatus};
-use crate::models::player::Player;
 
 use crate::schema::*;
 
@@ -34,7 +32,9 @@ pub struct Game {
     pub owner: i32,
     pub code: String,
     pub status: GameStatus,
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub start_time: Option<DateTime<Utc>>,
+    pub end_time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Identifiable, Insertable)]
@@ -43,23 +43,20 @@ pub struct Game {
 pub struct NewPlayerGame {
     player: i32,
     game: i32,
-    target: Option<i32>,
     codename: String,
     status: PlayerStatus,
-    target_status: TargetStatus,
 }
 
-const GAME_CODE_LEN: u32 = 8; //To be moved in some config file
-
-lazy_static! {
-    static ref CODE_CHARS: Vec<char> = ('A'..='Z').chain('0'..='9').collect();
-}
-
-fn get_game_code() -> String {
-    let mut rng = thread_rng();
-    (0..GAME_CODE_LEN)
-        .map(|_| CODE_CHARS.iter().choose(&mut rng).unwrap())
-        .collect()
+#[derive(Debug, Serialize, Associations, Deserialize, Queryable)]
+#[belongs_to(Player, foreign_key = "player")]
+#[belongs_to(Game, foreign_key = "game")]
+#[table_name = "playergame"]
+pub struct PlayerGame {
+    pub player: i32,
+    pub game: i32,
+    pub codename: String,
+    pub status: PlayerStatus,
+    pub joined_at: DateTime<Utc>,
 }
 
 impl Game {
@@ -116,5 +113,73 @@ impl Game {
         })
     }
 
-    // pub fn join(&self, code: String, account_id: i32) -> Result
+    pub fn join(code: &String, player_id: i32) -> Result<()> {
+        let conn = db::connection()?;
+        let codename = get_agent_name();
+
+        let res = conn.transaction(|| {
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            //Find if player is already in a game, if so reject request
+            let active_game_count = playergame::table
+                .filter(playergame::player.eq(player_id))
+                .inner_join(game::table)
+                .filter(game::status.eq(GameStatus::ACTIVE))
+                .count()
+                .execute(&conn)?;
+
+            if active_game_count > 0 {
+                return Err(RollbackTransaction);
+            }
+
+            let new_player_game = NewPlayerGame {
+                player: player_id,
+                game: requested_game.id,
+                codename,
+                status: PlayerStatus::ALIVE,
+            };
+
+            diesel::insert_into(playergame::table)
+                .values(new_player_game.clone())
+                .execute(&conn)?;
+
+            Ok(())
+        });
+
+        let err_str = format!("User {} couldn't join game {}", player_id, code);
+        res.map_err(|e| color_eyre::Report::new(e).wrap_err(err_str))
+    }
+
+    pub fn start_game(code: &String, player_id: i32) -> Result<()> {
+        let conn = db::connection()?;
+        diesel::update(
+            game::table
+                .filter(game::code.eq(code))
+                .filter(game::owner.eq(player_id)),
+        )
+        .set((
+            game::status.eq(GameStatus::ACTIVE),
+            game::start_time.eq(chrono::offset::Utc::now()),
+            game::end_time.eq(chrono::offset::Utc::now() + chrono::Duration::days(3)), //TODO: de-hardcode this
+        ))
+        .execute(&conn)
+        .map_err(|e| {
+            color_eyre::Report::new(e)
+                .wrap_err(format!("User {} couldn't start game {}", player_id, code))
+        })?;
+
+        Ok(())
+    }
+
+    pub fn get_game_status(code: &String) -> Result<GameStatus> {
+        let conn = db::connection()?;
+        let requested_game = game::table
+            .filter(game::code.eq(code))
+            .first::<Game>(&conn)
+            .map_err(|e| {
+                color_eyre::Report::new(e)
+                    .wrap_err(format!("Couldn't fetch game status for code {}", code))
+            })?;
+        Ok(requested_game.status)
+    }
 }

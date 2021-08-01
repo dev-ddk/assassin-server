@@ -1,7 +1,7 @@
 use actix_web::{
     dev::Payload, error::ErrorForbidden, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
 };
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use diesel::prelude::*;
 use diesel::{Insertable, Queryable};
@@ -32,7 +32,8 @@ pub struct Player {
     pub email: String,
     pub uid: String,
     pub role: Role,
-    pub registered_at: NaiveDateTime,
+    pub picture: Option<String>,
+    pub registered_at: DateTime<Utc>,
 }
 
 impl Player {
