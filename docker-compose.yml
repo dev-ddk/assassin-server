@@ -20,6 +20,7 @@ services:
         environment:
             - HOST=${HOST}
             - PORT=${PORT}
+            - ENABLE_BUNYAN=false
             - POSTGRES_HOST=db
             - POSTGRES_PORT=5432
             - POSTGRES_USER=${POSTGRES_USER}
