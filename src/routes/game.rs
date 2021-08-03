@@ -11,20 +11,14 @@ pub struct GameCreationInfo {
     game_name: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct GameCreationResult {
-    #[serde(rename(serialize = "gameCode"))]
-    game_code: String,
-}
-
-#[post("/create")]
+#[post("/create_game")]
 #[instrument]
 pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> impl Responder {
     let game = Game::new(info.game_name.clone(), player.id);
     match game {
         Ok(game) => {
             info!("Created new game: {:?}", game);
-            HttpResponse::Created().json(GameCreationResult {
+            HttpResponse::Created().json(GameInfo {
                 game_code: game.code,
             })
         }
@@ -35,12 +29,13 @@ pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> impl R
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GameInfo {
+    #[serde(rename(deserialize = "gameCode", serialize = "gameCode"))]
     game_code: String,
 }
 
-#[post("/join")]
+#[post("/join_game")]
 #[instrument]
 pub async fn join(player: Player, info: web::Json<GameInfo>) -> impl Responder {
     let res = Game::join(&info.game_code, player.id);
@@ -57,7 +52,7 @@ pub async fn join(player: Player, info: web::Json<GameInfo>) -> impl Responder {
     }
 }
 
-#[post("/start")]
+#[post("/start_game")]
 #[instrument]
 pub async fn start(player: Player, info: web::Json<GameInfo>) -> impl Responder {
     let res = Game::start_game(&info.game_code, player.id);
@@ -80,7 +75,7 @@ pub struct StatusResult {
 }
 
 //TODO: only people inside the lobby should be able to query this
-#[get("/status")]
+#[get("/game_status")]
 #[instrument]
 pub async fn get_status(player: Player, info: web::Json<GameInfo>) -> impl Responder {
     let status = Game::get_game_status(&info.game_code);
@@ -136,7 +131,7 @@ pub async fn get_game_info(player: Player, info: web::Json<GameInfo>) -> impl Re
 
 #[get("/user_info")]
 #[instrument]
-pub async fn get_user_info(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_user_info(player: Player) -> impl Responder {
     let res = player.get_user_info();
     match res {
         Ok(user_info) => HttpResponse::Ok().json(user_info),

@@ -442,9 +442,22 @@ impl Game {
 
             if !is_user_in_game {
                 info!(
-                    "User {} is currently not in the requested game {}. Cannot get end time",
+                    "User {} is currently not in the requested game {}. Cannot get kill",
                     player_id, code
                 );
+                return Err(RollbackTransaction);
+            }
+
+            let has_target = assignment::table
+                .filter(assignment::game.eq(requested_game.id))
+                .filter(assignment::assassin.eq(player_id))
+                .filter(assignment::status.eq(TargetStatus::CURRENT))
+                .count()
+                .get_result::<i64>(&conn)?
+                > 0;
+
+            if !has_target {
+                info!("User {} is has no target {}. Cannot kill", player_id, code);
                 return Err(RollbackTransaction);
             }
 

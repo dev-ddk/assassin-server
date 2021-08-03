@@ -7,6 +7,7 @@ use diesel::prelude::*;
 use diesel::{result::Error::RollbackTransaction, Identifiable, Insertable, Queryable};
 use futures_util::future::{err, ok, Ready};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use tracing::error;
 
 use crate::db;
@@ -137,7 +138,7 @@ impl Player {
                 .filter(assignment::assassin.eq(self.id))
                 .filter(assignment::status.eq(TargetStatus::KILL_SUCCESS))
                 .count()
-                .execute(&conn)?;
+                .get_result::<i64>(&conn)?;
 
             let user_info = UserInfo {
                 email: self.email.clone(),
@@ -145,7 +146,7 @@ impl Player {
                 picture: self.picture.clone(),
                 active: has_active_game,
                 curr_lobby_code: active_game_code,
-                total_kills: total_kills,
+                total_kills: usize::try_from(total_kills).unwrap(),
             };
 
             Ok(user_info)
@@ -189,14 +190,14 @@ impl Player {
                 .filter(assignment::assassin.eq(self.id))
                 .filter(assignment::status.eq(TargetStatus::KILL_SUCCESS))
                 .count()
-                .execute(&conn)?;
+                .get_result::<i64>(&conn)?;
 
             let agent_info = AgentInfo {
                 codename: codename,
                 target: target_nickname,
                 target_picture: target_picture,
                 alive: alive,
-                kills: kills,
+                kills: usize::try_from(kills).unwrap(),
             };
 
             Ok(agent_info)
