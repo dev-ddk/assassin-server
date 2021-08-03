@@ -13,7 +13,7 @@ pub enum GameStatus {
     PAUSED,
 }
 
-#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize, PartialEq)]
 #[PgType = "player_status_t"]
 #[DieselType = "Player_status_t"]
 #[DbValueStyle = "verbatim"]

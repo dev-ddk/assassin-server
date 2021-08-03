@@ -1,13 +1,15 @@
 use crate::db;
-use crate::models::enums::{GameStatus, PlayerStatus};
-use crate::models::player::Player;
+use crate::models::enums::{GameStatus, PlayerStatus, TargetStatus};
+use crate::models::player::{AgentStats, Player};
 use crate::utils::genstring::{get_agent_name, get_game_code};
+
 use chrono::{DateTime, Utc};
-use color_eyre::Result;
+use color_eyre::{Report, Result};
 use diesel::prelude::*;
 use diesel::{
     result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError,
-    result::Error::RollbackTransaction, Associations, Identifiable, Insertable, Queryable,
+    result::Error::RollbackTransaction, result::QueryResult, Associations, Identifiable,
+    Insertable, Queryable,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -23,9 +25,9 @@ pub struct NewGame {
     status: GameStatus,
 }
 
-#[derive(Debug, Serialize, Associations, Deserialize, Queryable)]
-#[table_name = "game"]
+#[derive(Debug, Serialize, Associations, Deserialize, Queryable, Identifiable)]
 #[belongs_to(Player, foreign_key = "owner")]
+#[table_name = "game"]
 pub struct Game {
     pub id: i32,
     pub name: Option<String>,
@@ -59,6 +61,36 @@ pub struct PlayerGame {
     pub joined_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Serialize, Queryable)]
+pub struct GamePlayerInfo {
+    pub nickname: String,
+    pub picture: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GameInfo {
+    pub game_name: String,
+    pub admin_nickame: String,
+    pub players: Vec<GamePlayerInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GameStats {
+    pub winner: AgentStats,
+    pub ranking: Vec<AgentStats>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Codenames {
+    pub codenames: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Queryable)]
+pub struct PlayerCount {
+    assassin: i32,
+    count: usize,
+}
+
 impl Game {
     pub fn find(id: i32) -> Result<Self> {
         let conn = db::connection()?;
@@ -79,37 +111,72 @@ impl Game {
         let code = get_game_code();
 
         let mut new_game = NewGame {
-            name: game_name,
+            name: game_name.clone(),
             owner: game_owner,
             code,
             status: GameStatus::WAITING_FOR_PLAYERS,
         };
 
         conn.transaction(|| {
-            loop {
+            // Check for currently active games which the player hasn't left
+            let active_game_count = playergame::table
+                .inner_join(game::table)
+                .filter(playergame::player.eq(game_owner))
+                .filter(playergame::status.ne(PlayerStatus::LEFT_GAME))
+                .filter(game::status.eq(GameStatus::ACTIVE))
+                .count()
+                .execute(&conn)?;
 
-                let res = diesel::insert_into(game::table)
+            if active_game_count > 0 {
+                return Err(RollbackTransaction);
+            }
+
+            // Keep on generating codes until we get a unique one
+            // Since the number of possible codes is around 2 trillion, we expect this
+            // to run only once almost always
+            loop {
+                let res: QueryResult<Game> = diesel::insert_into(game::table)
                     .values(new_game.clone())
                     .get_result(&conn);
 
                 match res {
+                    // Creation of new game was successful
                     Ok(game) => {
+                        //Insert the game owner into the game automatically
+                        let new_player_game = NewPlayerGame {
+                            player: game_owner.clone(),
+                            game: game.id,
+                            codename: get_agent_name(),
+                            status: PlayerStatus::ALIVE
+                        };
+
+                        diesel::insert_into(playergame::table)
+                            .values(new_player_game)
+                            .execute(&conn)?;
+
                         return Ok(game);
-                    }
+                    },
+
+                    // Creation of new game failed because of duplicated game code
                     Err(DatabaseError(UniqueViolation, e)) => {
                         info!("Got unique violation while creating new game (probably due to duplicate game code): {:?}", e);
                         let code = get_game_code();
                         new_game.code = code;
-                    }
+                    },
+
+                    // Creation of new game failed for other reasons
                     Err(e) => {
-                        let err_str = format!(
-                            "Failed in creating game {}",
-                            serde_json::to_string_pretty(&new_game).unwrap()
-                        );
-                        return Err(color_eyre::Report::new(e).wrap_err(err_str));
+                        return Err(e);
                     }
                 }
             }
+        }).map_err(|e| {
+            let err_str = format!(
+                "Failed in creating game {} for user {}",
+                game_name,
+                game_owner
+            );
+            Report::new(e).wrap_err(err_str)
         })
     }
 
@@ -122,8 +189,8 @@ impl Game {
 
             //Find if player is already in a game, if so reject request
             let active_game_count = playergame::table
-                .filter(playergame::player.eq(player_id))
                 .inner_join(game::table)
+                .filter(playergame::player.eq(player_id))
                 .filter(game::status.eq(GameStatus::ACTIVE))
                 .count()
                 .execute(&conn)?;
@@ -147,7 +214,7 @@ impl Game {
         });
 
         let err_str = format!("User {} couldn't join game {}", player_id, code);
-        res.map_err(|e| color_eyre::Report::new(e).wrap_err(err_str))
+        res.map_err(|e| Report::new(e).wrap_err(err_str))
     }
 
     pub fn start_game(code: &String, player_id: i32) -> Result<()> {
@@ -164,11 +231,45 @@ impl Game {
         ))
         .execute(&conn)
         .map_err(|e| {
-            color_eyre::Report::new(e)
-                .wrap_err(format!("User {} couldn't start game {}", player_id, code))
+            Report::new(e).wrap_err(format!("User {} couldn't start game {}", player_id, code))
         })?;
 
         Ok(())
+    }
+
+    pub fn stop_game(code: &String, player_id: i32) -> Result<()> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)?;
+
+            let is_user_in_game = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .filter(playergame::player.eq(player_id))
+                .count()
+                .execute(&conn)? > 0;
+
+            if !is_user_in_game {
+                info!("User {} is currently not in the requested game {}. Cannot stop game", player_id, code);
+                return Err(RollbackTransaction);
+            }
+
+            if requested_game.end_time.is_some() && requested_game.end_time.unwrap() > chrono::offset::Utc::now() {
+                diesel::update(&requested_game)
+                    .set(game::status.eq(GameStatus::FINISHED))
+                    .execute(&conn)?;
+                Ok(())
+            } else {
+                info!("Couldn't stop game (Either end time hasn't been set yet or the end time hasn't arrived yet)");
+                Err(RollbackTransaction)
+            }
+        }).map_err(|e| {
+            Report::new(e).wrap_err(
+                format!("Couldn't stop game {}", code)
+            )
+        })
     }
 
     pub fn get_game_status(code: &String) -> Result<GameStatus> {
@@ -177,9 +278,240 @@ impl Game {
             .filter(game::code.eq(code))
             .first::<Game>(&conn)
             .map_err(|e| {
-                color_eyre::Report::new(e)
-                    .wrap_err(format!("Couldn't fetch game status for code {}", code))
+                Report::new(e).wrap_err(format!("Couldn't fetch game status for code {}", code))
             })?;
         Ok(requested_game.status)
     }
+
+    pub fn leave_game(code: &String, player_id: i32) -> Result<()> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            // Fetch the game, as long as it's not already finished
+            // If it is finished, throw an error
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .filter(game::status.ne(GameStatus::FINISHED))
+                .first(&conn)?;
+
+            // Update and leave the game
+            diesel::update(
+                playergame::table
+                    .filter(playergame::game.eq(requested_game.id))
+                    .filter(playergame::player.eq(player_id))
+                    .filter(playergame::status.ne(PlayerStatus::LEFT_GAME)),
+            )
+            .set(playergame::status.eq(PlayerStatus::LEFT_GAME))
+            .execute(&conn)?;
+
+            Ok(())
+        })
+        .map_err(|e: diesel::result::Error| {
+            Report::new(e).wrap_err(format!("User {} couldn't leave game {}", player_id, code))
+        })
+    }
+
+    pub fn get_game_info(code: &String, player_id: i32) -> Result<GameInfo> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            let is_user_in_game = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .filter(playergame::player.eq(player_id))
+                .count()
+                .execute(&conn)?
+                > 0;
+
+            if !is_user_in_game {
+                info!(
+                    "User {} is currently not in the requested game {}. Cannot get game info",
+                    player_id, code
+                );
+                return Err(RollbackTransaction);
+            }
+
+            let owner: Player = player::table
+                .filter(player::id.eq(requested_game.owner))
+                .first(&conn)?;
+
+            let players: Vec<GamePlayerInfo> = playergame::table
+                .inner_join(player::table)
+                .filter(playergame::game.eq(requested_game.id))
+                .select((player::nickname, player::picture))
+                .load::<GamePlayerInfo>(&conn)?;
+
+            let game_info = GameInfo {
+                //TODO: right now the game name is nullable, debate whether we should require it?
+                game_name: requested_game.name.unwrap(),
+                admin_nickame: owner.nickname,
+                players: players,
+            };
+
+            Ok(game_info)
+        })
+        .map_err(|e| Report::new(e).wrap_err(format!("Couldn't fetch game info for game {}", code)))
+    }
+
+    //TODO: it's inconvenient to check everytime manually if the user is in the game
+    // We should refactor it and make a common check.
+    // Maybe even retrieve the game automatically?
+    pub fn get_codenames(code: &String, player_id: i32) -> Result<Codenames> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            //TODO: should we check whether the game is active or not?
+            let is_user_in_game = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .filter(playergame::player.eq(player_id))
+                .count()
+                .execute(&conn)?
+                > 0;
+
+            if !is_user_in_game {
+                info!(
+                    "User {} is currently not in the requested game {}. Cannot get codenames",
+                    player_id, code
+                );
+                return Err(RollbackTransaction);
+            }
+
+            let codenames = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .select(playergame::codename)
+                .load(&conn)?;
+
+            Ok(Codenames { codenames })
+        })
+        .map_err(|e| {
+            Report::new(e).wrap_err(format!("Could not fetch codenames for game {}", code))
+        })
+    }
+
+    pub fn get_end_time(code: &String, player_id: i32) -> Result<DateTime<Utc>> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            //TODO: should we check whether the game is active or not?
+            let is_user_in_game = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .filter(playergame::player.eq(player_id))
+                .count()
+                .execute(&conn)?
+                > 0;
+
+            if !is_user_in_game {
+                info!(
+                    "User {} is currently not in the requested game {}. Cannot get end time",
+                    player_id, code
+                );
+                return Err(RollbackTransaction);
+            }
+
+            //TODO: all these requests will give back a server error.
+            //We should create an enum of errors which the functions may return
+            //and map them to a helpful error response
+            if requested_game.end_time.is_none() {
+                info!("Attempted to fetch time for a game which hasn't set it yet");
+                return Err(RollbackTransaction);
+            }
+
+            Ok(requested_game.end_time.unwrap())
+        })
+        .map_err(|e| Report::new(e).wrap_err(format!("Failed to fetch end time for game {}", code)))
+    }
+
+    pub fn kill_player(code: &String, player_id: i32) -> Result<()> {
+        let conn = db::connection()?;
+
+        conn.transaction(|| {
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            //TODO: should we check whether the game is active or not?
+            let is_user_in_game = playergame::table
+                .filter(playergame::game.eq(requested_game.id))
+                .filter(playergame::player.eq(player_id))
+                .count()
+                .execute(&conn)?
+                > 0;
+
+            if !is_user_in_game {
+                info!(
+                    "User {} is currently not in the requested game {}. Cannot get end time",
+                    player_id, code
+                );
+                return Err(RollbackTransaction);
+            }
+
+            diesel::update(
+                assignment::table
+                    .filter(assignment::game.eq(requested_game.id))
+                    .filter(assignment::assassin.eq(player_id))
+                    .filter(assignment::status.eq(TargetStatus::CURRENT)),
+            )
+            .set(assignment::status.eq(TargetStatus::KILL_SUCCESS))
+            .execute(&conn)?;
+
+            Ok(())
+        })
+        .map_err(|e| {
+            Report::new(e).wrap_err(format!(
+                "Failed to kill current target for player {} in game {}",
+                player_id, code
+            ))
+        })
+    }
+
+    //    pub fn game_stats(code: &String, player_id: i32) -> Result<()> {
+    //        //Diesel doesn't support GROUP BY queries in a many-to-many setting
+    //        //This means we have to dirty our hands with raw SQL queries...
+    //        let conn = db::connection()?;
+
+    //        conn.transaction(|| {
+    //            // let kill_counts: HashMap<i32, usize> = diesel::sql_query(
+    //            //     "SELECT (assassin, COUNT(*))
+    //            //     FROM assignment
+    //            //     WHERE status = 'KILL_SUCCESS'
+    //            //     GROUP BY assassin"
+    //            // ).load::<PlayerCount>(&conn).into_iter().collect();
+
+    //            // let death_counts: HashMap<i32, usize> = diesel::sql_query(
+    //            //     "SELECT (assassin, COUNT(*))
+    //            //     FROM assignment
+    //            //     WHERE status = 'KILL_SUCCESS'
+    //            //     GROUP BY target"
+    //            // ).load(&conn).into_iter.collect();
+    //            //
+    //            let kill_counts = assignment::table
+    //                .group_by(assignment::assassin)
+    //                .filter(assignment::status.eq(TargetStatus::KILL_SUCCESS))
+    //                .select((assignment::assassin, diesel::dsl::count(assignment::target)));
+
+    //            // info!("Got the following query: {}", diesel::debug_query::<DB, _>(&kill_counts));
+
+    //            // let requested_game: Game = game::table
+    //            //     .filter(game::code.eq(code))
+    //            //     .first(&conn)?;
+
+    //            // let all_players = playergame::table
+    //            //     .inner_join(player::table)
+    //            //     .filter(playergame::game.eq(requested_game.id))
+    //            //     .select((player::id, player::nickname, playergame::codename, player::picture))
+    //            //     .load(&conn);
+
+    //            // let game_stats = GameStats {
+
+    //            // };
+
+    //            Ok(())
+    //            // Ok(game_stats)
+
+    //        })
+
+    //    }
 }

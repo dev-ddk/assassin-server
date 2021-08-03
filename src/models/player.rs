@@ -2,19 +2,19 @@ use actix_web::{
     dev::Payload, error::ErrorForbidden, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
 };
 use chrono::{DateTime, Utc};
-use color_eyre::Result;
+use color_eyre::{Report, Result};
 use diesel::prelude::*;
-use diesel::{Insertable, Queryable};
+use diesel::{result::Error::RollbackTransaction, Identifiable, Insertable, Queryable};
 use futures_util::future::{err, ok, Ready};
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use crate::db;
-use crate::models::enums::Role;
+use crate::models::enums::{GameStatus, PlayerStatus, Role, TargetStatus};
+use crate::models::game::Game;
 use crate::utils::auth;
 
 use crate::schema::*;
-
-// type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
 #[table_name = "player"]
@@ -25,7 +25,8 @@ pub struct NewPlayer {
     role: Role,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable)]
+#[derive(Debug, Serialize, Deserialize, Queryable, Identifiable)]
+#[table_name = "player"]
 pub struct Player {
     pub id: i32,
     pub nickname: String,
@@ -34,6 +35,35 @@ pub struct Player {
     pub role: Role,
     pub picture: Option<String>,
     pub registered_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserInfo {
+    pub nickname: String,
+    pub email: String,
+    pub picture: Option<String>,
+    pub active: bool,
+    pub curr_lobby_code: Option<String>,
+    pub total_kills: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentInfo {
+    codename: String,
+    target: Option<String>,
+    target_picture: Option<String>, //See discussion on nullable picture
+    alive: bool,
+    kills: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentStats {
+    nickname: String,
+    codename: String,
+    picture: Option<String>,
+    kills: usize,
+    deaths: usize,
+    score: usize,
 }
 
 impl Player {
@@ -73,6 +103,110 @@ impl Player {
                 );
                 color_eyre::Report::new(e).wrap_err(err_str)
             })
+    }
+
+    pub fn get_user_info(&self) -> Result<UserInfo> {
+        //Info about email, username, propic are already in `self`, so we query only the remaining
+
+        let conn = db::connection()?;
+        conn.transaction(|| {
+            let active_games: Vec<String> = playergame::table
+                .inner_join(game::table)
+                .filter(playergame::player.eq(self.id))
+                .filter(game::status.ne(GameStatus::FINISHED))
+                .select(game::code)
+                .distinct()
+                .load(&conn)?;
+
+            if active_games.len() > 1 {
+                error!("User {:?} has a more than one active game", &self);
+                return Err(RollbackTransaction);
+            }
+
+            let has_active_game = active_games.len() > 0;
+
+            let active_game_code = if active_games.len() > 0 {
+                Some(active_games[0].clone())
+            } else {
+                None
+            };
+
+            let total_kills = assignment::table
+                .inner_join(game::table)
+                .filter(game::status.eq(GameStatus::FINISHED))
+                .filter(assignment::assassin.eq(self.id))
+                .filter(assignment::status.eq(TargetStatus::KILL_SUCCESS))
+                .count()
+                .execute(&conn)?;
+
+            let user_info = UserInfo {
+                email: self.email.clone(),
+                nickname: self.nickname.clone(),
+                picture: self.picture.clone(),
+                active: has_active_game,
+                curr_lobby_code: active_game_code,
+                total_kills: total_kills,
+            };
+
+            Ok(user_info)
+        })
+        .map_err(|e: diesel::result::Error| {
+            Report::new(e).wrap_err(format!(
+                "Failed to fetch user information for user {:?}",
+                &self
+            ))
+        })
+    }
+
+    pub fn get_agent_info(&self, code: &String) -> Result<AgentInfo> {
+        let conn = db::connection()?;
+        conn.transaction(|| {
+            //TODO: Should check here whether the game is finished or not?
+            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+
+            let (codename, status): (String, PlayerStatus) = playergame::table
+                .filter(playergame::player.eq(self.id))
+                .filter(playergame::game.eq(requested_game.id))
+                .select((playergame::codename, playergame::status))
+                .first(&conn)?;
+
+            let alive = status == PlayerStatus::ALIVE;
+
+            let target_info = assignment::table
+                .inner_join(player::table.on(assignment::target.eq(player::id)))
+                .filter(assignment::assassin.eq(self.id))
+                .filter(assignment::status.eq(TargetStatus::CURRENT))
+                .select((player::nickname, player::picture))
+                .first(&conn);
+
+            let (target_nickname, target_picture) = match target_info {
+                Ok((nick, pic)) => (Some(nick), pic),
+                Err(_) => (None, None),
+            };
+
+            let kills = assignment::table
+                .filter(assignment::game.eq(requested_game.id))
+                .filter(assignment::assassin.eq(self.id))
+                .filter(assignment::status.eq(TargetStatus::KILL_SUCCESS))
+                .count()
+                .execute(&conn)?;
+
+            let agent_info = AgentInfo {
+                codename: codename,
+                target: target_nickname,
+                target_picture: target_picture,
+                alive: alive,
+                kills: kills,
+            };
+
+            Ok(agent_info)
+        })
+        .map_err(|e: diesel::result::Error| {
+            Report::new(e).wrap_err(format!(
+                "Failed to fetch agent information for user {:?}",
+                &self
+            ))
+        })
     }
 }
 
