@@ -11,6 +11,12 @@ pub struct GameCreationInfo {
     game_name: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GameCreationResult {
+    #[serde(rename(serialize = "gameCode"))]
+    game_code: String,
+}
+
 #[post("/create")]
 #[instrument]
 pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> impl Responder {
@@ -18,11 +24,13 @@ pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> impl R
     match game {
         Ok(game) => {
             info!("Created new game: {:?}", game);
-            HttpResponse::Created().finish()
+            HttpResponse::Created().json(GameCreationResult {
+                game_code: game.code,
+            })
         }
         Err(e) => {
             error!("Failed to create game: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -44,7 +52,7 @@ pub async fn join(player: Player, info: web::Json<GameInfo>) -> impl Responder {
         }
         Err(e) => {
             error!("Failed to join game: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -61,7 +69,7 @@ pub async fn start(player: Player, info: web::Json<GameInfo>) -> impl Responder 
         }
         Err(e) => {
             error!("Failed to start game: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -82,7 +90,7 @@ pub async fn get_status(player: Player, info: web::Json<GameInfo>) -> impl Respo
         }),
         Err(e) => {
             info!("Failed to fetch game status: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -95,7 +103,7 @@ pub async fn get_agent_info(player: Player, info: web::Json<GameInfo>) -> impl R
         Ok(agent_info) => HttpResponse::Ok().json(agent_info),
         Err(e) => {
             info!("Failed to get agent info: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -108,7 +116,7 @@ pub async fn kill(player: Player, info: web::Json<GameInfo>) -> impl Responder {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(e) => {
             info!("Failed to kill target: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -121,7 +129,7 @@ pub async fn get_game_info(player: Player, info: web::Json<GameInfo>) -> impl Re
         Ok(game_info) => HttpResponse::Ok().json(game_info),
         Err(e) => {
             info!("Failed to get game info: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -134,7 +142,7 @@ pub async fn get_user_info(player: Player, info: web::Json<GameInfo>) -> impl Re
         Ok(user_info) => HttpResponse::Ok().json(user_info),
         Err(e) => {
             info!("Failed to get user_info: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -147,7 +155,7 @@ pub async fn get_codenames(player: Player, info: web::Json<GameInfo>) -> impl Re
         Ok(codenames) => HttpResponse::Ok().json(codenames),
         Err(e) => {
             info!("Failed to get codenames: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -160,7 +168,7 @@ pub async fn get_end_time(player: Player, info: web::Json<GameInfo>) -> impl Res
         Ok(end_time) => HttpResponse::Ok().body(format!("{}", end_time)),
         Err(e) => {
             info!("Failed to get end time: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }
@@ -173,7 +181,7 @@ pub async fn end_game(player: Player, info: web::Json<GameInfo>) -> impl Respond
         Ok(_) => HttpResponse::Ok().finish(),
         Err(e) => {
             info!("Failed to get end time: {:?}", e);
-            HttpResponse::BadRequest().body(format!("{:?}", e))
+            HttpResponse::BadRequest().body(format!("{:?}", e.root_cause()))
         }
     }
 }

@@ -47,7 +47,7 @@ CREATE TABLE game (
     owner           INT NOT NULL
                     REFERENCES player(id)
                         ON UPDATE CASCADE ON DELETE NO ACTION,
-    code            VARCHAR(6) UNIQUE NOT NULL,
+    code            VARCHAR(8) UNIQUE NOT NULL,
     -- Insert here game settings
     status          game_status_t NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,

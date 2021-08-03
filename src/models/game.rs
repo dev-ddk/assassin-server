@@ -118,16 +118,16 @@ impl Game {
         };
 
         conn.transaction(|| {
-            // Check for currently active games which the player hasn't left
             let active_game_count = playergame::table
                 .inner_join(game::table)
                 .filter(playergame::player.eq(game_owner))
                 .filter(playergame::status.ne(PlayerStatus::LEFT_GAME))
-                .filter(game::status.eq(GameStatus::ACTIVE))
+                .filter(game::status.ne(GameStatus::FINISHED))
                 .count()
-                .execute(&conn)?;
+                .get_result::<i64>(&conn)?;
 
             if active_game_count > 0 {
+                info!("User has active game: rolling back! {}", active_game_count);
                 return Err(RollbackTransaction);
             }
 
@@ -193,7 +193,7 @@ impl Game {
                 .filter(playergame::player.eq(player_id))
                 .filter(game::status.eq(GameStatus::ACTIVE))
                 .count()
-                .execute(&conn)?;
+                .get_result::<i64>(&conn)?;
 
             if active_game_count > 0 {
                 return Err(RollbackTransaction);
@@ -249,7 +249,7 @@ impl Game {
                 .filter(playergame::game.eq(requested_game.id))
                 .filter(playergame::player.eq(player_id))
                 .count()
-                .execute(&conn)? > 0;
+                .get_result::<i64>(&conn)? > 0;
 
             if !is_user_in_game {
                 info!("User {} is currently not in the requested game {}. Cannot stop game", player_id, code);
@@ -321,7 +321,7 @@ impl Game {
                 .filter(playergame::game.eq(requested_game.id))
                 .filter(playergame::player.eq(player_id))
                 .count()
-                .execute(&conn)?
+                .get_result::<i64>(&conn)?
                 > 0;
 
             if !is_user_in_game {
@@ -368,7 +368,7 @@ impl Game {
                 .filter(playergame::game.eq(requested_game.id))
                 .filter(playergame::player.eq(player_id))
                 .count()
-                .execute(&conn)?
+                .get_result::<i64>(&conn)?
                 > 0;
 
             if !is_user_in_game {
@@ -402,7 +402,7 @@ impl Game {
                 .filter(playergame::game.eq(requested_game.id))
                 .filter(playergame::player.eq(player_id))
                 .count()
-                .execute(&conn)?
+                .get_result::<i64>(&conn)?
                 > 0;
 
             if !is_user_in_game {
@@ -437,7 +437,7 @@ impl Game {
                 .filter(playergame::game.eq(requested_game.id))
                 .filter(playergame::player.eq(player_id))
                 .count()
-                .execute(&conn)?
+                .get_result::<i64>(&conn)?
                 > 0;
 
             if !is_user_in_game {

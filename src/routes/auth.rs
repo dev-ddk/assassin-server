@@ -34,8 +34,10 @@ pub async fn register(claims: auth::UserClaims, info: web::Json<RegisterInfo>) -
         Err(e) => {
             info!("Error during registration: {}", e);
             info!("Wrapped error: {}", e.root_cause());
-            HttpResponse::build(StatusCode::BAD_REQUEST)
-                .body("An error occurred during registration")
+            HttpResponse::build(StatusCode::BAD_REQUEST).body(format!(
+                "An error occurred during registration: {:?}",
+                e.root_cause()
+            ))
         }
     }
 }
