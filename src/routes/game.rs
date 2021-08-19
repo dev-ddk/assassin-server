@@ -37,7 +37,7 @@ pub struct GameInfo {
 
 #[post("/join_game")]
 #[instrument]
-pub async fn join(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn join(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::join(&info.game_code, player.id);
 
     match res {
@@ -54,7 +54,7 @@ pub async fn join(player: Player, info: web::Json<GameInfo>) -> impl Responder {
 
 #[post("/start_game")]
 #[instrument]
-pub async fn start(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn start(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::start_game(&info.game_code, player.id);
 
     match res {
@@ -77,7 +77,7 @@ pub struct StatusResult {
 //TODO: only people inside the lobby should be able to query this
 #[get("/game_status")]
 #[instrument]
-pub async fn get_status(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_status(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let status = Game::get_game_status(&info.game_code);
     match status {
         Ok(status) => HttpResponse::Ok().json(StatusResult {
@@ -92,7 +92,7 @@ pub async fn get_status(player: Player, info: web::Json<GameInfo>) -> impl Respo
 
 #[get("/agent_info")]
 #[instrument]
-pub async fn get_agent_info(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_agent_info(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let agent_info = player.get_agent_info(&info.game_code);
     match agent_info {
         Ok(agent_info) => HttpResponse::Ok().json(agent_info),
@@ -105,7 +105,7 @@ pub async fn get_agent_info(player: Player, info: web::Json<GameInfo>) -> impl R
 
 #[post("/kill")]
 #[instrument]
-pub async fn kill(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn kill(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::kill_player(&info.game_code, player.id);
     match res {
         Ok(_) => HttpResponse::Ok().finish(),
@@ -118,7 +118,7 @@ pub async fn kill(player: Player, info: web::Json<GameInfo>) -> impl Responder {
 
 #[get("/game_info")]
 #[instrument]
-pub async fn get_game_info(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_game_info(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::get_game_info(&info.game_code, player.id);
     match res {
         Ok(game_info) => HttpResponse::Ok().json(game_info),
@@ -144,7 +144,7 @@ pub async fn get_user_info(player: Player) -> impl Responder {
 
 #[get("/codenames")]
 #[instrument]
-pub async fn get_codenames(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_codenames(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::get_codenames(&info.game_code, player.id);
     match res {
         Ok(codenames) => HttpResponse::Ok().json(codenames),
@@ -157,7 +157,7 @@ pub async fn get_codenames(player: Player, info: web::Json<GameInfo>) -> impl Re
 
 #[get("/end_game")]
 #[instrument]
-pub async fn get_end_time(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn get_end_time(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::get_end_time(&info.game_code, player.id);
     match res {
         Ok(end_time) => HttpResponse::Ok().body(format!("{}", end_time)),
@@ -170,7 +170,7 @@ pub async fn get_end_time(player: Player, info: web::Json<GameInfo>) -> impl Res
 
 #[post("/end_game")]
 #[instrument]
-pub async fn end_game(player: Player, info: web::Json<GameInfo>) -> impl Responder {
+pub async fn end_game(player: Player, info: web::Query<GameInfo>) -> impl Responder {
     let res = Game::stop_game(&info.game_code, player.id);
     match res {
         Ok(_) => HttpResponse::Ok().finish(),
