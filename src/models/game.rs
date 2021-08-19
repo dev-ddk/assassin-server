@@ -70,7 +70,7 @@ pub struct GamePlayerInfo {
 #[derive(Debug, Serialize)]
 pub struct GameInfo {
     pub game_name: String,
-    pub admin_nickame: String,
+    pub admin_nickname: String,
     pub players: Vec<GamePlayerInfo>,
 }
 
@@ -345,7 +345,7 @@ impl Game {
             let game_info = GameInfo {
                 //TODO: right now the game name is nullable, debate whether we should require it?
                 game_name: requested_game.name.unwrap(),
-                admin_nickame: owner.nickname,
+                admin_nickname: owner.nickname,
                 players: players,
             };
 
