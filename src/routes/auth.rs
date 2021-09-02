@@ -1,9 +1,10 @@
-use actix_web::{http::StatusCode, post, web, HttpResponse, Responder};
+use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
 use tracing::{info, instrument};
 
 use crate::models::player;
 use crate::utils::auth;
+use crate::models::api_errors::ApiError;
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterInfo {
@@ -12,34 +13,22 @@ pub struct RegisterInfo {
 
 #[post("/register")]
 #[instrument]
-pub async fn register(claims: auth::UserClaims, info: web::Json<RegisterInfo>) -> impl Responder {
+pub async fn register(claims: auth::UserClaims, info: web::Json<RegisterInfo>) -> Result<HttpResponse, ApiError> {
     info!("Looking for a player with uid {}", &claims.user_id);
 
-    let res = player::Player::register(
+    let account = player::Player::register(
         info.nickname.clone(),
         claims.email.clone(),
         claims.user_id.clone(),
+    )?;
+
+    let response = format!(
+        "[Authenticated as {}] Registered player info: {}",
+        claims.email,
+        serde_json::to_string(&account).expect("Could not serialize user")
     );
 
-    match res {
-        Ok(account) => {
-            let response = format!(
-                "[Authenticated as {}] Registered player info: {}",
-                claims.email,
-                serde_json::to_string(&account).expect("Could not serialize user")
-            );
-
-            HttpResponse::Ok().body(response)
-        }
-        Err(e) => {
-            info!("Error during registration: {}", e);
-            info!("Wrapped error: {}", e.root_cause());
-            HttpResponse::build(StatusCode::BAD_REQUEST).body(format!(
-                "An error occurred during registration: {:?}",
-                e.root_cause()
-            ))
-        }
-    }
+    Ok(HttpResponse::Ok().body(response))
 }
 
 pub fn config(cfg: &mut web::ServiceConfig) {

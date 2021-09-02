@@ -27,6 +27,7 @@ tracing-actix-web = "0.2.1"
 tracing-error = "0.1.2"
 lazy_static = "1.4.0"
 diesel = { version = "1.4.7", features = ["postgres", "r2d2", "chrono"] }
+r2d2 = "0.8.9"
 diesel-derive-enum = { version = "1", features = ["postgres"] }
 diesel_migrations = "1.4.0"
 listenfd = "0.3.5"

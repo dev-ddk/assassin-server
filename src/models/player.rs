@@ -2,7 +2,7 @@ use actix_web::{
     dev::Payload, error::ErrorForbidden, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
 };
 use chrono::{DateTime, Utc};
-use color_eyre::{Report, Result};
+use color_eyre::Report;
 use diesel::prelude::*;
 use diesel::{result::Error::RollbackTransaction, Identifiable, Insertable, Queryable};
 use futures_util::future::{err, ok, Ready};
@@ -14,6 +14,7 @@ use crate::db;
 use crate::models::enums::{GameStatus, PlayerStatus, Role, TargetStatus};
 use crate::models::game::Game;
 use crate::utils::auth;
+use crate::models::model_errors::{ModelError, Result};
 
 use crate::schema::*;
 
@@ -94,16 +95,11 @@ impl Player {
             role: Role::USER,
         };
 
-        diesel::insert_into(player::table)
+        let res = diesel::insert_into(player::table)
             .values(new_account.clone())
-            .get_result(&conn)
-            .map_err(|e| {
-                let err_str = format!(
-                    "Failed in registering {}",
-                    serde_json::to_string(&new_account).unwrap()
-                );
-                color_eyre::Report::new(e).wrap_err(err_str)
-            })
+            .get_result(&conn)?;
+
+        Ok(res)
     }
 
     pub fn get_user_info(&self) -> Result<UserInfo> {
@@ -121,7 +117,7 @@ impl Player {
 
             if active_games.len() > 1 {
                 error!("User {:?} has a more than one active game", &self);
-                return Err(RollbackTransaction);
+                return Err(ModelError::AlreadyInGame);
             }
 
             let has_active_game = active_games.len() > 0;
@@ -150,12 +146,6 @@ impl Player {
             };
 
             Ok(user_info)
-        })
-        .map_err(|e: diesel::result::Error| {
-            Report::new(e).wrap_err(format!(
-                "Failed to fetch user information for user {:?}",
-                &self
-            ))
         })
     }
 
@@ -193,27 +183,21 @@ impl Player {
                 .get_result::<i64>(&conn)?;
 
             let agent_info = AgentInfo {
-                codename: codename,
+                codename,
                 target: target_nickname,
-                target_picture: target_picture,
-                alive: alive,
+                target_picture,
+                alive,
                 kills: usize::try_from(kills).unwrap(),
             };
 
             Ok(agent_info)
-        })
-        .map_err(|e: diesel::result::Error| {
-            Report::new(e).wrap_err(format!(
-                "Failed to fetch agent information for user {:?}",
-                &self
-            ))
         })
     }
 }
 
 impl FromRequest for Player {
     type Error = Error;
-    type Future = Ready<Result<Self, Self::Error>>;
+    type Future = Ready<std::result::Result<Self, Self::Error>>;
     type Config = ();
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {

@@ -2,13 +2,14 @@ use crate::db;
 use crate::models::enums::{GameStatus, PlayerStatus, TargetStatus};
 use crate::models::player::{AgentStats, Player};
 use crate::utils::genstring::{get_agent_name, get_game_code};
+use crate::models::model_errors::{ModelError, Result};
 
 use chrono::{DateTime, Utc};
-use color_eyre::{Report, Result};
+use color_eyre::Report;
 use diesel::prelude::*;
 use diesel::{
     result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError,
-    result::Error::RollbackTransaction, result::QueryResult, Associations, Identifiable,
+    result::QueryResult, Associations, Identifiable,
     Insertable, Queryable,
 };
 use serde::{Deserialize, Serialize};
@@ -128,7 +129,7 @@ impl Game {
 
             if active_game_count > 0 {
                 info!("User has active game: rolling back! {}", active_game_count);
-                return Err(RollbackTransaction);
+                return Err(ModelError::AlreadyInGame);
             }
 
             // Keep on generating codes until we get a unique one
@@ -166,17 +167,10 @@ impl Game {
 
                     // Creation of new game failed for other reasons
                     Err(e) => {
-                        return Err(e);
+                        return Err(ModelError::UnknownError(Report::new(e)));
                     }
                 }
             }
-        }).map_err(|e| {
-            let err_str = format!(
-                "Failed in creating game {} for user {}",
-                game_name,
-                game_owner
-            );
-            Report::new(e).wrap_err(err_str)
         })
     }
 
@@ -184,7 +178,7 @@ impl Game {
         let conn = db::connection()?;
         let codename = get_agent_name();
 
-        let res = conn.transaction(|| {
+        conn.transaction(|| {
             let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
 
             //Find if player is already in a game, if so reject request
@@ -196,7 +190,7 @@ impl Game {
                 .get_result::<i64>(&conn)?;
 
             if active_game_count > 0 {
-                return Err(RollbackTransaction);
+                return Err(ModelError::AlreadyInGame);
             }
 
             let new_player_game = NewPlayerGame {
@@ -211,10 +205,7 @@ impl Game {
                 .execute(&conn)?;
 
             Ok(())
-        });
-
-        let err_str = format!("User {} couldn't join game {}", player_id, code);
-        res.map_err(|e| Report::new(e).wrap_err(err_str))
+        })
     }
 
     pub fn start_game(code: &String, player_id: i32) -> Result<()> {
@@ -229,10 +220,7 @@ impl Game {
             game::start_time.eq(chrono::offset::Utc::now()),
             game::end_time.eq(chrono::offset::Utc::now() + chrono::Duration::days(3)), //TODO: de-hardcode this
         ))
-        .execute(&conn)
-        .map_err(|e| {
-            Report::new(e).wrap_err(format!("User {} couldn't start game {}", player_id, code))
-        })?;
+        .execute(&conn)?;
 
         Ok(())
     }
@@ -253,7 +241,7 @@ impl Game {
 
             if !is_user_in_game {
                 info!("User {} is currently not in the requested game {}. Cannot stop game", player_id, code);
-                return Err(RollbackTransaction);
+                return Err(ModelError::NotInGame);
             }
 
             if requested_game.end_time.is_some() && requested_game.end_time.unwrap() > chrono::offset::Utc::now() {
@@ -263,12 +251,8 @@ impl Game {
                 Ok(())
             } else {
                 info!("Couldn't stop game (Either end time hasn't been set yet or the end time hasn't arrived yet)");
-                Err(RollbackTransaction)
+                Err(ModelError::GameNotStarted)
             }
-        }).map_err(|e| {
-            Report::new(e).wrap_err(
-                format!("Couldn't stop game {}", code)
-            )
         })
     }
 
@@ -276,10 +260,8 @@ impl Game {
         let conn = db::connection()?;
         let requested_game = game::table
             .filter(game::code.eq(code))
-            .first::<Game>(&conn)
-            .map_err(|e| {
-                Report::new(e).wrap_err(format!("Couldn't fetch game status for code {}", code))
-            })?;
+            .first::<Game>(&conn)?;
+
         Ok(requested_game.status)
     }
 
@@ -306,9 +288,6 @@ impl Game {
 
             Ok(())
         })
-        .map_err(|e: diesel::result::Error| {
-            Report::new(e).wrap_err(format!("User {} couldn't leave game {}", player_id, code))
-        })
     }
 
     pub fn get_game_info(code: &String, player_id: i32) -> Result<GameInfo> {
@@ -329,7 +308,7 @@ impl Game {
                     "User {} is currently not in the requested game {}. Cannot get game info",
                     player_id, code
                 );
-                return Err(RollbackTransaction);
+                return Err(ModelError::NotInGame);
             }
 
             let owner: Player = player::table
@@ -346,12 +325,11 @@ impl Game {
                 //TODO: right now the game name is nullable, debate whether we should require it?
                 game_name: requested_game.name.unwrap(),
                 admin_nickname: owner.nickname,
-                players: players,
+                players,
             };
 
             Ok(game_info)
         })
-        .map_err(|e| Report::new(e).wrap_err(format!("Couldn't fetch game info for game {}", code)))
     }
 
     //TODO: it's inconvenient to check everytime manually if the user is in the game
@@ -376,7 +354,7 @@ impl Game {
                     "User {} is currently not in the requested game {}. Cannot get codenames",
                     player_id, code
                 );
-                return Err(RollbackTransaction);
+                return Err(ModelError::NotInGame);
             }
 
             let codenames = playergame::table
@@ -385,9 +363,6 @@ impl Game {
                 .load(&conn)?;
 
             Ok(Codenames { codenames })
-        })
-        .map_err(|e| {
-            Report::new(e).wrap_err(format!("Could not fetch codenames for game {}", code))
         })
     }
 
@@ -410,7 +385,7 @@ impl Game {
                     "User {} is currently not in the requested game {}. Cannot get end time",
                     player_id, code
                 );
-                return Err(RollbackTransaction);
+                return Err(ModelError::NotInGame);
             }
 
             //TODO: all these requests will give back a server error.
@@ -418,12 +393,11 @@ impl Game {
             //and map them to a helpful error response
             if requested_game.end_time.is_none() {
                 info!("Attempted to fetch time for a game which hasn't set it yet");
-                return Err(RollbackTransaction);
+                return Err(ModelError::GameNotStarted);
             }
 
             Ok(requested_game.end_time.unwrap())
         })
-        .map_err(|e| Report::new(e).wrap_err(format!("Failed to fetch end time for game {}", code)))
     }
 
     pub fn kill_player(code: &String, player_id: i32) -> Result<()> {
@@ -445,7 +419,7 @@ impl Game {
                     "User {} is currently not in the requested game {}. Cannot get kill",
                     player_id, code
                 );
-                return Err(RollbackTransaction);
+                return Err(ModelError::NotInGame);
             }
 
             let has_target = assignment::table
@@ -458,7 +432,7 @@ impl Game {
 
             if !has_target {
                 info!("User {} is has no target {}. Cannot kill", player_id, code);
-                return Err(RollbackTransaction);
+                return Err(ModelError::NoCurrentTarget);
             }
 
             diesel::update(
@@ -471,12 +445,6 @@ impl Game {
             .execute(&conn)?;
 
             Ok(())
-        })
-        .map_err(|e| {
-            Report::new(e).wrap_err(format!(
-                "Failed to kill current target for player {} in game {}",
-                player_id, code
-            ))
         })
     }
 
