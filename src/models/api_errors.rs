@@ -8,9 +8,7 @@ use crate::models::model_errors::ModelError;
 pub enum ApiError {
     #[error("The request contains bad data (missing parameters or incorrect call)")]
     BadRequest(String),
-    #[error("The user requested was not found")]
-    UserNotFound(String),
-    #[error("You do not have the authorization to access this resource")]
+    #[error("You are not authorized to access this resource")]
     Unauthorized(String),
     #[error("Internal Server Error")]
     InternalServerError(String)
@@ -28,7 +26,6 @@ impl ApiError {
     pub fn name(&self) -> String {
         match self {
             Self::BadRequest(_) => "Bad Request".to_string(),
-            Self::UserNotFound(_) => "User Not Found".to_string(),
             Self::Unauthorized(_) => "Unauthorized".to_string(),
             Self::InternalServerError(_) => "Internal Server Error".to_string(),
         }
@@ -38,10 +35,9 @@ impl ApiError {
     pub fn error_code(&self) -> String {
         match self {
             Self::BadRequest(err_code)
-                | Self::UserNotFound(err_code)
-                | Self::Unauthorized(err_code)
                 | Self::InternalServerError(err_code) 
-                => err_code.to_string(),
+                | Self::Unauthorized(err_code)
+                => err_code.to_string()
         }
     }
 }
@@ -59,7 +55,9 @@ impl From<ModelError> for ApiError {
                 => Self::BadRequest(e.error_code()),
             ModelError::DatabaseError
                 | ModelError::UnknownError(_)
-                => Self::InternalServerError(e.error_code())
+                => Self::InternalServerError(e.error_code()),
+            ModelError::NotRegistered
+                => Self::Unauthorized(e.error_code())
         }
     }
 }
@@ -68,7 +66,6 @@ impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::UserNotFound(_) => StatusCode::NOT_FOUND,
             Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -80,7 +77,6 @@ impl ResponseError for ApiError {
         let response = ErrorResponse {
             status_code: status_code.as_u16(),
             error: self.name(),
-            // message: self.to_string(),
             error_code
         };
         HttpResponse::build(status_code).json(response)

@@ -16,19 +16,13 @@ pub struct RegisterInfo {
 pub async fn register(claims: auth::UserClaims, info: web::Json<RegisterInfo>) -> Result<HttpResponse, ApiError> {
     info!("Looking for a player with uid {}", &claims.user_id);
 
-    let account = player::Player::register(
+    player::Player::register(
         info.nickname.clone(),
         claims.email.clone(),
         claims.user_id.clone(),
     )?;
 
-    let response = format!(
-        "[Authenticated as {}] Registered player info: {}",
-        claims.email,
-        serde_json::to_string(&account).expect("Could not serialize user")
-    );
-
-    Ok(HttpResponse::Ok().body(response))
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub fn config(cfg: &mut web::ServiceConfig) {

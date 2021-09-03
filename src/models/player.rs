@@ -1,5 +1,5 @@
 use actix_web::{
-    dev::Payload, error::ErrorForbidden, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
+    dev::Payload, FromRequest, HttpRequest,
 };
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -14,6 +14,7 @@ use crate::models::enums::{GameStatus, PlayerStatus, Role, TargetStatus};
 use crate::models::game::Game;
 use crate::utils::auth;
 use crate::models::model_errors::{ModelError, Result};
+use crate::models::api_errors::ApiError;
 
 use crate::schema::*;
 
@@ -196,7 +197,7 @@ impl Player {
 }
 
 impl FromRequest for Player {
-    type Error = Error;
+    type Error = ApiError;
     type Future = Ready<std::result::Result<Self, Self::Error>>;
     type Config = ();
 
@@ -208,10 +209,11 @@ impl FromRequest for Player {
                 let account = Player::find_by_uid(&claims.user_id);
                 match account {
                     Ok(account) => ok(account),
-                    Err(_) => err(ErrorForbidden("You must register your account")),
+                    Err(_) => err(ModelError::NotRegistered.into()),
                 }
             }
-            None => err(ErrorUnauthorized("Invalid token")),
+            // This should never happen anyways
+            None => err(ApiError::Unauthorized("MISSING_CLAIMS".to_string())),
         }
     }
 }

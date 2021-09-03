@@ -20,6 +20,8 @@ pub enum ModelError {
     NoCurrentTarget,
     #[error("User is already registered")]
     AlreadyRegistered,
+    #[error("You are not registered yet")]
+    NotRegistered,
     #[error("Unknown error")]
     UnknownError(Report)
 }
@@ -38,6 +40,7 @@ impl ModelError {
             Self::GameNotFound => "GAME_NOT_FOUND".to_string(),
             Self::NoCurrentTarget => "NO_CURRENT_TARGET".to_string(),
             Self::AlreadyRegistered => "ALREADY_REGISTERED".to_string(),
+            Self::NotRegistered => "NOT_REGISTERED".to_string(),
             Self::UnknownError(_) => "UNKNOWN".to_string()
         }
     }
