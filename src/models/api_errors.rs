@@ -20,7 +20,7 @@ pub enum ApiError {
 struct ErrorResponse {
     status_code: u16,
     error: String,
-    message: String,
+    // message: String,
     error_code: String
 }
 
@@ -36,13 +36,12 @@ impl ApiError {
 
     #[allow(irrefutable_let_patterns)] //This is temporarily here, it may happen that there are API errors without a code
     pub fn error_code(&self) -> String {
-        if let Self::BadRequest(err_code)
+        match self {
+            Self::BadRequest(err_code)
                 | Self::UserNotFound(err_code)
                 | Self::Unauthorized(err_code)
-                | Self::InternalServerError(err_code) = self {
-            err_code.to_string()
-        } else {
-            "".to_string()
+                | Self::InternalServerError(err_code) 
+                => err_code.to_string(),
         }
     }
 }
@@ -50,8 +49,17 @@ impl ApiError {
 impl From<ModelError> for ApiError {
     fn from(e: ModelError) -> Self {
         match e {
-            ModelError::AlreadyInGame | ModelError::NotInGame | ModelError::GameNotStarted | ModelError::NoCurrentTarget => Self::BadRequest(e.error_code()),
-            ModelError::DatabaseError | ModelError::UnknownError(_) => Self::InternalServerError(e.error_code())
+            ModelError::AlreadyInAnotherGame
+                | ModelError::AlreadyInRequestedGame 
+                | ModelError::NotInGame 
+                | ModelError::GameNotStarted 
+                | ModelError::NoCurrentTarget 
+                | ModelError::GameNotFound 
+                | ModelError::AlreadyRegistered
+                => Self::BadRequest(e.error_code()),
+            ModelError::DatabaseError
+                | ModelError::UnknownError(_)
+                => Self::InternalServerError(e.error_code())
         }
     }
 }
@@ -72,7 +80,7 @@ impl ResponseError for ApiError {
         let response = ErrorResponse {
             status_code: status_code.as_u16(),
             error: self.name(),
-            message: self.to_string(),
+            // message: self.to_string(),
             error_code
         };
         HttpResponse::build(status_code).json(response)

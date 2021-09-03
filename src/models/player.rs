@@ -2,9 +2,8 @@ use actix_web::{
     dev::Payload, error::ErrorForbidden, error::ErrorUnauthorized, Error, FromRequest, HttpRequest,
 };
 use chrono::{DateTime, Utc};
-use color_eyre::Report;
 use diesel::prelude::*;
-use diesel::{result::Error::RollbackTransaction, Identifiable, Insertable, Queryable};
+use diesel::{Identifiable, Insertable, Queryable};
 use futures_util::future::{err, ok, Ready};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -97,7 +96,8 @@ impl Player {
 
         let res = diesel::insert_into(player::table)
             .values(new_account.clone())
-            .get_result(&conn)?;
+            .get_result(&conn)
+            .map_err(|_| ModelError::AlreadyRegistered)?;
 
         Ok(res)
     }
@@ -117,7 +117,7 @@ impl Player {
 
             if active_games.len() > 1 {
                 error!("User {:?} has a more than one active game", &self);
-                return Err(ModelError::AlreadyInGame);
+                return Err(ModelError::AlreadyInAnotherGame);
             }
 
             let has_active_game = active_games.len() > 0;

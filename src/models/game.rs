@@ -129,7 +129,7 @@ impl Game {
 
             if active_game_count > 0 {
                 info!("User has active game: rolling back! {}", active_game_count);
-                return Err(ModelError::AlreadyInGame);
+                return Err(ModelError::AlreadyInAnotherGame);
             }
 
             // Keep on generating codes until we get a unique one
@@ -179,7 +179,10 @@ impl Game {
         let codename = get_agent_name();
 
         conn.transaction(|| {
-            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             //Find if player is already in a game, if so reject request
             let active_game_count = playergame::table
@@ -190,7 +193,7 @@ impl Game {
                 .get_result::<i64>(&conn)?;
 
             if active_game_count > 0 {
-                return Err(ModelError::AlreadyInGame);
+                return Err(ModelError::AlreadyInAnotherGame);
             }
 
             let new_player_game = NewPlayerGame {
@@ -202,7 +205,8 @@ impl Game {
 
             diesel::insert_into(playergame::table)
                 .values(new_player_game.clone())
-                .execute(&conn)?;
+                .execute(&conn)
+                .map_err(|_| ModelError::AlreadyInRequestedGame)?;
 
             Ok(())
         })
@@ -231,7 +235,8 @@ impl Game {
         conn.transaction(|| {
             let requested_game: Game = game::table
                 .filter(game::code.eq(code))
-                .first(&conn)?;
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             let is_user_in_game = playergame::table
                 .filter(playergame::game.eq(requested_game.id))
@@ -258,9 +263,10 @@ impl Game {
 
     pub fn get_game_status(code: &String) -> Result<GameStatus> {
         let conn = db::connection()?;
-        let requested_game = game::table
+        let requested_game: Game = game::table
             .filter(game::code.eq(code))
-            .first::<Game>(&conn)?;
+            .first(&conn)
+            .map_err(|_| ModelError::GameNotFound)?;
 
         Ok(requested_game.status)
     }
@@ -274,7 +280,8 @@ impl Game {
             let requested_game: Game = game::table
                 .filter(game::code.eq(code))
                 .filter(game::status.ne(GameStatus::FINISHED))
-                .first(&conn)?;
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             // Update and leave the game
             diesel::update(
@@ -294,7 +301,10 @@ impl Game {
         let conn = db::connection()?;
 
         conn.transaction(|| {
-            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             let is_user_in_game = playergame::table
                 .filter(playergame::game.eq(requested_game.id))
@@ -339,7 +349,10 @@ impl Game {
         let conn = db::connection()?;
 
         conn.transaction(|| {
-            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             //TODO: should we check whether the game is active or not?
             let is_user_in_game = playergame::table
@@ -370,7 +383,10 @@ impl Game {
         let conn = db::connection()?;
 
         conn.transaction(|| {
-            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             //TODO: should we check whether the game is active or not?
             let is_user_in_game = playergame::table
@@ -404,7 +420,10 @@ impl Game {
         let conn = db::connection()?;
 
         conn.transaction(|| {
-            let requested_game: Game = game::table.filter(game::code.eq(code)).first(&conn)?;
+            let requested_game: Game = game::table
+                .filter(game::code.eq(code))
+                .first(&conn)
+                .map_err(|_| ModelError::GameNotFound)?;
 
             //TODO: should we check whether the game is active or not?
             let is_user_in_game = playergame::table
