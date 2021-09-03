@@ -1,5 +1,5 @@
 use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, PooledConnection, Pool};
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel_migrations::embed_migrations;
 use lazy_static::lazy_static;
 use tracing::info;

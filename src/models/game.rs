@@ -1,16 +1,15 @@
 use crate::db;
 use crate::models::enums::{GameStatus, PlayerStatus, TargetStatus};
+use crate::models::model_errors::{ModelError, Result};
 use crate::models::player::{AgentStats, Player};
 use crate::utils::genstring::{get_agent_name, get_game_code};
-use crate::models::model_errors::{ModelError, Result};
 
 use chrono::{DateTime, Utc};
 use color_eyre::Report;
 use diesel::prelude::*;
 use diesel::{
-    result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError,
-    result::QueryResult, Associations, Identifiable,
-    Insertable, Queryable,
+    result::DatabaseErrorKind::UniqueViolation, result::Error::DatabaseError, result::QueryResult,
+    Associations, Identifiable, Insertable, Queryable,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;

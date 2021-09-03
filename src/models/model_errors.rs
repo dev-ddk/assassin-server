@@ -1,5 +1,5 @@
-use thiserror::Error;
 use color_eyre::Report;
+use thiserror::Error;
 use tracing::info;
 
 #[derive(Debug, Error)]
@@ -23,11 +23,10 @@ pub enum ModelError {
     #[error("You are not registered yet")]
     NotRegistered,
     #[error("Unknown error")]
-    UnknownError(Report)
+    UnknownError(Report),
 }
 
 pub type Result<T> = std::result::Result<T, ModelError>;
-
 
 impl ModelError {
     pub fn error_code(&self) -> String {
@@ -41,7 +40,7 @@ impl ModelError {
             Self::NoCurrentTarget => "NO_CURRENT_TARGET".to_string(),
             Self::AlreadyRegistered => "ALREADY_REGISTERED".to_string(),
             Self::NotRegistered => "NOT_REGISTERED".to_string(),
-            Self::UnknownError(_) => "UNKNOWN".to_string()
+            Self::UnknownError(_) => "UNKNOWN".to_string(),
         }
     }
 }
@@ -59,4 +58,3 @@ impl From<r2d2::Error> for ModelError {
         Self::DatabaseError
     }
 }
-

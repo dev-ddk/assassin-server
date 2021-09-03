@@ -1,6 +1,4 @@
-use actix_web::{
-    dev::Payload, FromRequest, HttpRequest,
-};
+use actix_web::{dev::Payload, FromRequest, HttpRequest};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::{Identifiable, Insertable, Queryable};
@@ -10,11 +8,11 @@ use std::convert::TryFrom;
 use tracing::error;
 
 use crate::db;
+use crate::models::api_errors::ApiError;
 use crate::models::enums::{GameStatus, PlayerStatus, Role, TargetStatus};
 use crate::models::game::Game;
-use crate::utils::auth;
 use crate::models::model_errors::{ModelError, Result};
-use crate::models::api_errors::ApiError;
+use crate::utils::auth;
 
 use crate::schema::*;
 

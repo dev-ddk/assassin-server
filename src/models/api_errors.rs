@@ -11,7 +11,7 @@ pub enum ApiError {
     #[error("You are not authorized to access this resource")]
     Unauthorized(String),
     #[error("Internal Server Error")]
-    InternalServerError(String)
+    InternalServerError(String),
 }
 
 #[derive(Serialize)]
@@ -19,7 +19,7 @@ struct ErrorResponse {
     status_code: u16,
     error: String,
     // message: String,
-    error_code: String
+    error_code: String,
 }
 
 impl ApiError {
@@ -35,9 +35,8 @@ impl ApiError {
     pub fn error_code(&self) -> String {
         match self {
             Self::BadRequest(err_code)
-                | Self::InternalServerError(err_code) 
-                | Self::Unauthorized(err_code)
-                => err_code.to_string()
+            | Self::InternalServerError(err_code)
+            | Self::Unauthorized(err_code) => err_code.to_string(),
         }
     }
 }
@@ -46,18 +45,16 @@ impl From<ModelError> for ApiError {
     fn from(e: ModelError) -> Self {
         match e {
             ModelError::AlreadyInAnotherGame
-                | ModelError::AlreadyInRequestedGame 
-                | ModelError::NotInGame 
-                | ModelError::GameNotStarted 
-                | ModelError::NoCurrentTarget 
-                | ModelError::GameNotFound 
-                | ModelError::AlreadyRegistered
-                => Self::BadRequest(e.error_code()),
-            ModelError::DatabaseError
-                | ModelError::UnknownError(_)
-                => Self::InternalServerError(e.error_code()),
-            ModelError::NotRegistered
-                => Self::Unauthorized(e.error_code())
+            | ModelError::AlreadyInRequestedGame
+            | ModelError::NotInGame
+            | ModelError::GameNotStarted
+            | ModelError::NoCurrentTarget
+            | ModelError::GameNotFound
+            | ModelError::AlreadyRegistered => Self::BadRequest(e.error_code()),
+            ModelError::DatabaseError | ModelError::UnknownError(_) => {
+                Self::InternalServerError(e.error_code())
+            }
+            ModelError::NotRegistered => Self::Unauthorized(e.error_code()),
         }
     }
 }
@@ -77,7 +74,7 @@ impl ResponseError for ApiError {
         let response = ErrorResponse {
             status_code: status_code.as_u16(),
             error: self.name(),
-            error_code
+            error_code,
         };
         HttpResponse::build(status_code).json(response)
     }

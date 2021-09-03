@@ -2,10 +2,10 @@ use actix_web::{get, post, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
+use crate::models::api_errors::ApiError;
 use crate::models::enums::GameStatus;
 use crate::models::game::Game;
 use crate::models::player::Player;
-use crate::models::api_errors::ApiError;
 
 type HttpResult = std::result::Result<HttpResponse, ApiError>;
 
@@ -19,7 +19,9 @@ pub struct GameCreationInfo {
 pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> HttpResult {
     let game = Game::new(info.game_name.clone(), player.id)?;
     info!("Succesfully created game {}", game.code);
-    Ok(HttpResponse::Created().json(GameInfo{ game_code: game.code }))
+    Ok(HttpResponse::Created().json(GameInfo {
+        game_code: game.code,
+    }))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,7 +54,9 @@ pub struct StatusResult {
 #[instrument]
 pub async fn get_status(player: Player, info: web::Query<GameInfo>) -> HttpResult {
     let status = Game::get_game_status(&info.game_code)?;
-    Ok(HttpResponse::Ok().json(StatusResult{ game_status: status }))
+    Ok(HttpResponse::Ok().json(StatusResult {
+        game_status: status,
+    }))
 }
 
 #[get("/agent_info")]
