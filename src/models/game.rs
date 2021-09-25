@@ -2,6 +2,7 @@ use crate::db;
 use crate::models::enums::{GameStatus, PlayerStatus, TargetStatus};
 use crate::models::model_errors::{ModelError, Result};
 use crate::models::player::{AgentStats, Player};
+use crate::models::constants;
 use crate::utils::genstring::{get_agent_name, get_game_code};
 
 use chrono::{DateTime, Utc};
@@ -22,6 +23,7 @@ pub struct NewGame {
     name: String,
     owner: i32,
     code: String,
+    max_players: i32,
     status: GameStatus,
 }
 
@@ -33,6 +35,7 @@ pub struct Game {
     pub name: Option<String>,
     pub owner: i32,
     pub code: String,
+    pub max_players: i32, /* It's an int because the SQL standard doesn't have unsigned */
     pub status: GameStatus,
     pub created_at: DateTime<Utc>,
     pub start_time: Option<DateTime<Utc>>,
@@ -72,6 +75,9 @@ pub struct GameInfo {
     pub game_name: String,
     pub admin_nickname: String,
     pub players: Vec<GamePlayerInfo>,
+    pub max_players: i32,
+    pub has_started: bool,
+    pub start_time: Option<DateTime<Utc>>
 }
 
 #[derive(Debug, Serialize)]
@@ -106,7 +112,7 @@ impl Game {
         Ok(game)
     }
 
-    pub fn new(game_name: String, game_owner: i32) -> Result<Self> {
+    pub fn new(game_name: String, game_owner: i32, max_players: Option<i32>) -> Result<Self> {
         let conn = db::connection()?;
         let code = get_game_code();
 
@@ -114,6 +120,7 @@ impl Game {
             name: game_name.clone(),
             owner: game_owner,
             code,
+            max_players: max_players.unwrap_or(constants::DEFAULT_MAX_PLAYERS),
             status: GameStatus::WAITING_FOR_PLAYERS,
         };
 
@@ -333,6 +340,9 @@ impl Game {
             let game_info = GameInfo {
                 //TODO: right now the game name is nullable, debate whether we should require it?
                 game_name: requested_game.name.unwrap(),
+                max_players: requested_game.max_players,
+                has_started: requested_game.status == GameStatus::ACTIVE,
+                start_time: requested_game.start_time,
                 admin_nickname: owner.nickname,
                 players,
             };

@@ -21,6 +21,7 @@ table! {
         name -> Nullable<Varchar>,
         owner -> Int4,
         code -> Varchar,
+        max_players -> Int4,
         status -> Game_status_t,
         created_at -> Timestamptz,
         start_time -> Nullable<Timestamptz>,
@@ -61,4 +62,9 @@ joinable!(game -> player (owner));
 joinable!(playergame -> game (game));
 joinable!(playergame -> player (player));
 
-allow_tables_to_appear_in_same_query!(assignment, game, player, playergame,);
+allow_tables_to_appear_in_same_query!(
+    assignment,
+    game,
+    player,
+    playergame,
+);

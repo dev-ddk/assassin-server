@@ -2,7 +2,7 @@
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, DbEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, DbEnum, Serialize, Deserialize, PartialEq)]
 #[PgType = "game_status_t"]
 #[DieselType = "Game_status_t"]
 #[DbValueStyle = "verbatim"]

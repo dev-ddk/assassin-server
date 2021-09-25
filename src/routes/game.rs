@@ -12,12 +12,13 @@ type HttpResult = std::result::Result<HttpResponse, ApiError>;
 #[derive(Debug, Deserialize)]
 pub struct GameCreationInfo {
     game_name: String,
+    max_players: Option<i32>,
 }
 
 #[post("/create_game")]
 #[instrument]
 pub async fn create(player: Player, info: web::Json<GameCreationInfo>) -> HttpResult {
-    let game = Game::new(info.game_name.clone(), player.id)?;
+    let game = Game::new(info.game_name.clone(), player.id, info.max_players)?;
     info!("Succesfully created game {}", game.code);
     Ok(HttpResponse::Created().json(GameInfo {
         game_code: game.code,

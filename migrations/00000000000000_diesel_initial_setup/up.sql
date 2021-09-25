@@ -49,6 +49,7 @@ CREATE TABLE game (
                         ON UPDATE CASCADE ON DELETE NO ACTION,
     code            VARCHAR(8) UNIQUE NOT NULL,
     -- Insert here game settings
+    max_players     INT NOT NULL,
     status          game_status_t NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     start_time      TIMESTAMPTZ,
